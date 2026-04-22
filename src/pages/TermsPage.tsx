@@ -23,7 +23,7 @@ export function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-white mb-2">1. Aceitação dos Termos</h2>
             <p>
-              Ao acessar e utilizar a plataforma Vyral AI, operada por <strong>{`{EMPRESA}`}</strong>, inscrita no CNPJ nº <strong>{`{CNPJ}`}</strong>,
+              Ao acessar e utilizar a plataforma Vyral AI, operada por <strong>PESTANA TREINAMENTO PROFISSIONAL LTDA</strong>, inscrita no CNPJ nº <strong>63.675.747/0001-60</strong>,
               você concorda integralmente com estes Termos de Uso. Caso não concorde com qualquer cláusula, não utilize a plataforma.
             </p>
           </section>
@@ -81,7 +81,7 @@ export function TermsPage() {
             <h2 className="text-lg font-semibold text-white mb-2">7. Propriedade Intelectual</h2>
             <p>
               O conteúdo gerado pelo usuário através das ferramentas de IA pertence ao próprio usuário, que assume integralmente a responsabilidade pelo uso.
-              A marca Vyral AI, o código-fonte, o design e as tecnologias da plataforma são de propriedade exclusiva da <strong>{`{EMPRESA}`}</strong>.
+              A marca Vyral AI, o código-fonte, o design e as tecnologias da plataforma são de propriedade exclusiva da <strong>PESTANA TREINAMENTO PROFISSIONAL LTDA</strong>.
             </p>
           </section>
 
@@ -112,7 +112,7 @@ export function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-white mb-2">11. Foro</h2>
             <p>
-              Fica eleito o foro da Comarca de <strong>{`{CIDADE/UF}`}</strong> para dirimir quaisquer controvérsias decorrentes destes Termos,
+              Fica eleito o foro da Comarca de <strong>Salvador/BA</strong> para dirimir quaisquer controvérsias decorrentes destes Termos,
               com renúncia expressa a qualquer outro, por mais privilegiado que seja.
             </p>
           </section>
@@ -120,7 +120,7 @@ export function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-white mb-2">12. Contato</h2>
             <p>
-              Dúvidas sobre estes Termos podem ser enviadas para <strong>{`{EMAIL_SUPORTE}`}</strong>.
+              Dúvidas sobre estes Termos podem ser enviadas para <strong>suporte@appvyral.online</strong>.
             </p>
           </section>
         </div>

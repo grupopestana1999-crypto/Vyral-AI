@@ -23,8 +23,9 @@ export function PrivacyPage() {
           <section>
             <h2 className="text-lg font-semibold text-white mb-2">1. Controlador dos Dados</h2>
             <p>
-              O controlador dos dados pessoais coletados por esta plataforma é <strong>{`{EMPRESA}`}</strong>,
-              inscrita no CNPJ <strong>{`{CNPJ}`}</strong>, em conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018).
+              O controlador dos dados pessoais coletados por esta plataforma é <strong>PESTANA TREINAMENTO PROFISSIONAL LTDA</strong>,
+              inscrita no CNPJ <strong>63.675.747/0001-60</strong>, com sede em Salvador/BA,
+              em conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018).
             </p>
           </section>
 
@@ -102,7 +103,7 @@ export function PrivacyPage() {
               <li>Eliminação dos dados tratados com base em consentimento</li>
               <li>Revogação do consentimento</li>
             </ul>
-            <p className="mt-2">Para exercer esses direitos, envie e-mail para <strong>{`{EMAIL_DPO}`}</strong>.</p>
+            <p className="mt-2">Para exercer esses direitos, envie e-mail para <strong>suporte@appvyral.online</strong>.</p>
           </section>
 
           <section>
@@ -132,7 +133,7 @@ export function PrivacyPage() {
           <section>
             <h2 className="text-lg font-semibold text-white mb-2">12. Contato</h2>
             <p>
-              Encarregado pelo Tratamento de Dados (DPO): <strong>{`{NOME_DPO}`}</strong> — <strong>{`{EMAIL_DPO}`}</strong>.
+              Encarregado pelo Tratamento de Dados (DPO): <strong>Gabriel Pestana Pereira</strong> — <strong>suporte@appvyral.online</strong>.
             </p>
           </section>
         </div>
