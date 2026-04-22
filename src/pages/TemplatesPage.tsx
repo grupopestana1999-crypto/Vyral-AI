@@ -92,29 +92,40 @@ export function TemplatesPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(t => (
-            <div key={t.id} className="bg-surface-300 border border-white/5 rounded-xl p-4 space-y-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-white">{t.title}</h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                      t.type === 'video' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'
-                    }`}>{t.type === 'video' ? 'Vídeo' : 'Imagem'}</span>
-                    <span className="text-[10px] text-white/30">{t.category}</span>
-                  </div>
+            <div key={t.id} className="bg-surface-300 border border-white/5 rounded-xl overflow-hidden flex flex-col">
+              {(t.thumbnail_url || t.media_url) && (
+                <div className="relative h-40 bg-surface-400 overflow-hidden">
+                  {t.type === 'video' && t.media_url ? (
+                    <video src={t.media_url} poster={t.thumbnail_url ?? undefined} className="w-full h-full object-cover" muted loop playsInline onMouseEnter={e => (e.target as HTMLVideoElement).play()} onMouseLeave={e => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0 }} />
+                  ) : t.thumbnail_url ? (
+                    <img src={t.thumbnail_url} alt={t.title} className="w-full h-full object-cover" />
+                  ) : null}
                 </div>
-                <button onClick={() => toggleFavorite(t.id)} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
-                  <Heart size={16} className={favorites.has(t.id) ? 'fill-red-400 text-red-400' : 'text-white/30'} />
+              )}
+              <div className="p-4 space-y-3 flex-1 flex flex-col">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">{t.title}</h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                        t.type === 'video' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'
+                      }`}>{t.type === 'video' ? 'Vídeo' : 'Imagem'}</span>
+                      <span className="text-[10px] text-white/30">{t.category}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => toggleFavorite(t.id)} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
+                    <Heart size={16} className={favorites.has(t.id) ? 'fill-red-400 text-red-400' : 'text-white/30'} />
+                  </button>
+                </div>
+                {t.description && <p className="text-xs text-white/40">{t.description}</p>}
+                <div className="bg-surface-400 rounded-lg p-3 max-h-20 overflow-y-auto">
+                  <p className="text-xs text-white/60 font-mono">{t.prompt}</p>
+                </div>
+                <button onClick={() => copyPrompt(t.id, t.prompt)}
+                  className="mt-auto w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-primary-600/20 text-primary-400 text-sm font-medium hover:bg-primary-600/30 transition-colors cursor-pointer">
+                  {copied === t.id ? <><Check size={14} /> Copiado!</> : <><Copy size={14} /> Copiar Prompt</>}
                 </button>
               </div>
-              {t.description && <p className="text-xs text-white/40">{t.description}</p>}
-              <div className="bg-surface-400 rounded-lg p-3 max-h-20 overflow-y-auto">
-                <p className="text-xs text-white/60 font-mono">{t.prompt}</p>
-              </div>
-              <button onClick={() => copyPrompt(t.id, t.prompt)}
-                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-primary-600/20 text-primary-400 text-sm font-medium hover:bg-primary-600/30 transition-colors cursor-pointer">
-                {copied === t.id ? <><Check size={14} /> Copiado!</> : <><Copy size={14} /> Copiar Prompt</>}
-              </button>
             </div>
           ))}
         </div>

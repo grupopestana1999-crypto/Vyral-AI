@@ -74,6 +74,8 @@ export interface Avatar {
   name: string
   image_url: string
   category: string
+  description: string | null
+  gender: string | null
   is_active: boolean
 }
 
@@ -84,6 +86,8 @@ export interface PromptTemplate {
   type: 'video' | 'image'
   prompt: string
   description: string | null
+  media_url: string | null
+  thumbnail_url: string | null
   tags: string[] | null
   author: string | null
   created_at: string

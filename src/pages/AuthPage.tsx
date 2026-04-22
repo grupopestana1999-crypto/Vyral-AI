@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles, Mail, Lock, ArrowLeft, Loader2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth-store'
 import { toast } from 'sonner'
 import logoImg from '../assets/logo.png'
@@ -158,7 +159,10 @@ export function AuthPage() {
         </div>
 
         <p className="text-center text-xs text-white/30 mt-4">
-          Ao continuar, você concorda com nossos Termos de Uso e Política de Privacidade
+          Ao continuar, você concorda com nossos{' '}
+          <Link to="/terms" className="underline hover:text-primary-400">Termos de Uso</Link>
+          {' '}e{' '}
+          <Link to="/privacy" className="underline hover:text-primary-400">Política de Privacidade</Link>
         </p>
       </div>
     </div>

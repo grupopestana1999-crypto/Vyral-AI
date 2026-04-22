@@ -24,6 +24,8 @@ import { AdminBoosters } from './pages/admin/AdminBoosters'
 import { AdminReferrals } from './pages/admin/AdminReferrals'
 import { AdminLogs } from './pages/admin/AdminLogs'
 import { AdminSettings } from './pages/admin/AdminSettings'
+import { TermsPage } from './pages/TermsPage'
+import { PrivacyPage } from './pages/PrivacyPage'
 
 export default function App() {
   const initialize = useAuthStore((s: { initialize: () => Promise<void> }) => s.initialize)
@@ -47,6 +49,8 @@ export default function App() {
       />
       <Routes>
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
 
         <Route
           element={
