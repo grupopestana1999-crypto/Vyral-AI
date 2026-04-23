@@ -1,22 +1,25 @@
-import { Zap, Coins, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { Zap, Coins, ArrowRight, Play } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
-import { TOOL_CREDITS, TOOL_LABELS } from '../types/credits'
+import { BOOSTERS } from '../types/boosters'
+import { useRef, useEffect, useState } from 'react'
 
-const BOOSTERS = [
-  { id: 'grok_video', path: '/booster/grok', desc: 'Transforme imagens em vídeos com IA', videoUrl: '' },
-  { id: 'edit_image', path: '/booster/edit-image', desc: 'Substitua objetos em imagens com IA', videoUrl: '' },
-  { id: 'prompt_generator', path: '/booster/prompt', desc: 'Gere prompts estruturados e otimizados', videoUrl: '' },
-  { id: 'nano_banana_pro', path: '/booster/nano-banana', desc: 'Gere imagens via prompt de texto', videoUrl: '' },
-  { id: 'nano_banana_2', path: '/booster/nano-banana-2', desc: 'Geração avançada com referência + contexto', videoUrl: '' },
-  { id: 'veo_video', path: '/booster/veo', desc: 'Vídeos ultra-realistas com áudio nativo', videoUrl: '' },
-  { id: 'motion_control', path: '/booster/motion', desc: 'Controle de movimento de personagens', videoUrl: '' },
-  { id: 'human_engine', path: '/booster/human-engine', desc: 'Extração e replicação de movimentos', videoUrl: '' },
-  { id: 'avatar_builder', path: '/booster/avatar', desc: 'Crie influencers virtuais ultra-realistas', videoUrl: '' },
-  { id: 'kling_3', path: '/booster/kling', desc: 'Vídeos cinematográficos com áudio', videoUrl: '' },
-  { id: 'skin_enhancer', path: '/booster/skin', desc: 'Aprimoramento de textura de pele', videoUrl: '' },
-  { id: 'sora_remover', path: '/booster/sora', desc: 'Remoção de marca d\'água de vídeos Sora', videoUrl: '' },
-]
+function BoosterVideo({ url }: { url: string }) {
+  const ref = useRef<HTMLVideoElement>(null)
+  const [err, setErr] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      entries => entries.forEach(e => (e.isIntersecting ? el.play().catch(() => {}) : el.pause())),
+      { threshold: 0.1 }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+  if (err) return <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-900/40 to-accent-900/40"><Play size={28} className="text-white/30" /></div>
+  return <video ref={ref} src={url} className="w-full h-full object-cover" muted loop autoPlay playsInline preload="metadata" onError={() => setErr(true)} />
+}
 
 export function BoostersPage() {
   const navigate = useNavigate()
@@ -25,7 +28,7 @@ export function BoostersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center">
             <Zap size={20} className="text-white" />
@@ -41,38 +44,40 @@ export function BoostersPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {BOOSTERS.map(b => {
-          const key = b.id as keyof typeof TOOL_CREDITS
-          const cost = TOOL_CREDITS[key]
-          const label = TOOL_LABELS[b.id] ?? b.id
-          const isFree = cost === 0
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {BOOSTERS.map(b => (
+          <button
+            key={b.id}
+            onClick={() => navigate(b.tool === 'studio_redirect' ? '/influencer' : `/booster/${b.slug}`)}
+            className="group relative aspect-[4/5] bg-surface-300 border border-white/5 rounded-xl overflow-hidden text-left hover:border-primary-500/40 transition-all cursor-pointer"
+          >
+            {/* Vídeo preview em loop ocupando todo o card */}
+            <div className="absolute inset-0">
+              <BoosterVideo url={b.videoUrl} />
+            </div>
 
-          return (
-            <button
-              key={b.id}
-              onClick={() => navigate(b.path)}
-              className="bg-surface-300 border border-white/5 rounded-xl p-5 text-left hover:border-primary-500/30 transition-all group cursor-pointer"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-600/30 to-accent-600/30 flex items-center justify-center">
-                  <Zap size={18} className="text-primary-400" />
-                </div>
-                {isFree ? (
-                  <span className="px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 text-[10px] font-bold">FREE</span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-full bg-primary-600/20 text-primary-400 text-[10px] font-bold">{cost} créditos</span>
-                )}
+            {/* Overlay gradient */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none" />
+
+            {/* Badge custo canto superior direito */}
+            <div className="absolute top-2 right-2 z-10">
+              {b.isFree || b.credits === 0 ? (
+                <span className="px-2 py-0.5 rounded-full bg-green-500/90 text-white text-[10px] font-bold">FREE</span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full bg-primary-600/90 text-white text-[10px] font-bold backdrop-blur">{b.credits} cr</span>
+              )}
+            </div>
+
+            {/* Info no bottom */}
+            <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
+              <h3 className="text-sm font-bold text-white mb-0.5 truncate">{b.title}</h3>
+              <p className="text-[11px] text-white/70 line-clamp-2 mb-2">{b.description}</p>
+              <div className="flex items-center gap-1 text-[11px] text-primary-300 font-semibold">
+                Usar <ArrowRight size={10} className="group-hover:translate-x-1 transition-transform" />
               </div>
-              <h3 className="text-sm font-semibold text-white mb-1">{label}</h3>
-              <p className="text-xs text-white/40 mb-3">{b.desc}</p>
-              <div className="flex items-center gap-1 text-xs text-primary-400 group-hover:text-primary-300 transition-colors">
-                <span>Usar</span>
-                <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
-              </div>
-            </button>
-          )
-        })}
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   )
