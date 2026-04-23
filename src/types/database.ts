@@ -27,6 +27,10 @@ export interface Product {
   heat_score: number
   revenue: number
   items_sold: number
+  sales: number
+  additional_images: string[]
+  tiktok_url: string | null
+  commission_rate: number
   is_active: boolean
   source_url: string | null
   created_at: string
@@ -60,10 +64,15 @@ export interface ProductVideo {
 export interface Creator {
   id: string
   name: string
+  display_name: string | null
   username: string
   avatar_url: string
   profile_url: string
   followers: number
+  following: number
+  total_likes: number
+  total_videos: number
+  niche: string | null
   projected_monthly_sales: number
   is_active: boolean
   created_at: string
