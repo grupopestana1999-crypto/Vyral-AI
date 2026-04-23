@@ -1,11 +1,53 @@
-import { useState, useEffect } from 'react'
-import { FileText, Copy, Heart, Image, Video, Check } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { FileText, Copy, Heart, Image, Video, Check, Play } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth-store'
 import { toast } from 'sonner'
 import type { PromptTemplate } from '../types/database'
 
 type Filter = 'all' | 'video' | 'image' | 'favorites'
+
+function TemplateMedia({ template }: { template: PromptTemplate }) {
+  const [errored, setErrored] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    // Pausa vídeo quando fora da viewport pra performance
+    const el = videoRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      entries => entries.forEach(e => { e.isIntersecting ? el.play().catch(() => {}) : el.pause() }),
+      { threshold: 0.1 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  if (template.type === 'video' && template.media_url && !errored) {
+    return (
+      <video
+        ref={videoRef}
+        src={template.media_url}
+        poster={template.thumbnail_url ?? undefined}
+        className="w-full h-full object-cover"
+        muted
+        loop
+        autoPlay
+        playsInline
+        preload="metadata"
+        onError={() => setErrored(true)}
+      />
+    )
+  }
+  if (template.thumbnail_url && !errored) {
+    return <img src={template.thumbnail_url} alt={template.title} className="w-full h-full object-cover" onError={() => setErrored(true)} />
+  }
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-900/40 to-accent-900/40">
+      {template.type === 'video' ? <Play size={32} className="text-white/30" /> : <Image size={32} className="text-white/30" />}
+    </div>
+  )
+}
 
 export function TemplatesPage() {
   const { user } = useAuthStore()
@@ -67,22 +109,22 @@ export function TemplatesPage() {
         </div>
         <div>
           <h1 className="text-xl font-bold text-white">Templates</h1>
-          <p className="text-sm text-white/50">Biblioteca de prompts prontos</p>
+          <p className="text-sm text-white/50">Biblioteca de prompts prontos — clique pra copiar</p>
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {FILTERS.map(f => (
           <button key={f.key} onClick={() => setFilter(f.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all cursor-pointer ${
               filter === f.key ? 'bg-primary-600 text-white' : 'bg-surface-300 text-white/50 border border-white/10 hover:text-white'
             }`}>{f.icon} {f.label}</button>
         ))}
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-40 bg-surface-300 rounded-xl animate-pulse" />)}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => <div key={i} className="aspect-[9/16] bg-surface-300 rounded-xl animate-pulse" />)}
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20">
@@ -90,40 +132,43 @@ export function TemplatesPage() {
           <p className="text-white/40">Nenhum template encontrado</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {filtered.map(t => (
-            <div key={t.id} className="bg-surface-300 border border-white/5 rounded-xl overflow-hidden flex flex-col">
-              {(t.thumbnail_url || t.media_url) && (
-                <div className="relative h-40 bg-surface-400 overflow-hidden">
-                  {t.type === 'video' && t.media_url ? (
-                    <video src={t.media_url} poster={t.thumbnail_url ?? undefined} className="w-full h-full object-cover" muted loop playsInline onMouseEnter={e => (e.target as HTMLVideoElement).play()} onMouseLeave={e => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0 }} />
-                  ) : t.thumbnail_url ? (
-                    <img src={t.thumbnail_url} alt={t.title} className="w-full h-full object-cover" />
-                  ) : null}
+            <div key={t.id} className="group relative bg-surface-300 border border-white/5 rounded-xl overflow-hidden aspect-[9/16] hover:border-primary-500/40 transition-all">
+              {/* Mídia ocupa o card inteiro */}
+              <div className="absolute inset-0">
+                <TemplateMedia template={t} />
+              </div>
+
+              {/* Overlay gradient */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none" />
+
+              {/* Badge favorito no canto superior direito */}
+              <button
+                onClick={() => toggleFavorite(t.id)}
+                className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 backdrop-blur hover:bg-black/80 transition-colors cursor-pointer z-10"
+              >
+                <Heart size={14} className={favorites.has(t.id) ? 'fill-red-400 text-red-400' : 'text-white/80'} />
+              </button>
+
+              {/* Badge tipo canto superior esquerdo */}
+              <div className="absolute top-2 left-2 z-10">
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold backdrop-blur ${
+                  t.type === 'video' ? 'bg-blue-500/80 text-white' : 'bg-green-500/80 text-white'
+                }`}>{t.type === 'video' ? 'Vídeo' : 'Imagem'}</span>
+              </div>
+
+              {/* Info no bottom */}
+              <div className="absolute bottom-0 left-0 right-0 p-3 space-y-2 z-10">
+                <div>
+                  <p className="text-sm font-semibold text-white truncate">{t.title}</p>
+                  <p className="text-[10px] text-white/60 truncate">{t.category}</p>
                 </div>
-              )}
-              <div className="p-4 space-y-3 flex-1 flex flex-col">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold text-white">{t.title}</h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                        t.type === 'video' ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'
-                      }`}>{t.type === 'video' ? 'Vídeo' : 'Imagem'}</span>
-                      <span className="text-[10px] text-white/30">{t.category}</span>
-                    </div>
-                  </div>
-                  <button onClick={() => toggleFavorite(t.id)} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
-                    <Heart size={16} className={favorites.has(t.id) ? 'fill-red-400 text-red-400' : 'text-white/30'} />
-                  </button>
-                </div>
-                {t.description && <p className="text-xs text-white/40">{t.description}</p>}
-                <div className="bg-surface-400 rounded-lg p-3 max-h-20 overflow-y-auto">
-                  <p className="text-xs text-white/60 font-mono">{t.prompt}</p>
-                </div>
-                <button onClick={() => copyPrompt(t.id, t.prompt)}
-                  className="mt-auto w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-primary-600/20 text-primary-400 text-sm font-medium hover:bg-primary-600/30 transition-colors cursor-pointer">
-                  {copied === t.id ? <><Check size={14} /> Copiado!</> : <><Copy size={14} /> Copiar Prompt</>}
+                <button
+                  onClick={() => copyPrompt(t.id, t.prompt)}
+                  className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-primary-600 text-white text-xs font-semibold hover:brightness-110 transition-all cursor-pointer"
+                >
+                  {copied === t.id ? <><Check size={12} /> Copiado!</> : <><Copy size={12} /> Copiar Prompt</>}
                 </button>
               </div>
             </div>
