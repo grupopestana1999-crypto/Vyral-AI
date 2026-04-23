@@ -129,7 +129,11 @@ export function BoosterDetailPage() {
     setResult(null)
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke(booster.edgeFunction, { body: values })
+      const payload: Record<string, string> = { ...values }
+      if (booster.slug === 'skin') {
+        payload.edit_prompt = 'enhance skin texture with ultra realism, detailed pores, natural skin tones, cinematic lighting, 8k quality'
+      }
+      const { data, error: fnError } = await supabase.functions.invoke(booster.edgeFunction, { body: payload })
       if (fnError) throw new Error(fnError.message)
 
       if (data?.error) {
