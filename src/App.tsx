@@ -15,6 +15,7 @@ import { TemplatesPage } from './pages/TemplatesPage'
 import { CalculatorPage } from './pages/CalculatorPage'
 import { ReferralPage } from './pages/ReferralPage'
 import { CreditsPage } from './pages/CreditsPage'
+import { BoosterDetailPage } from './pages/BoosterDetailPage'
 import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminDashboard } from './pages/admin/AdminDashboard'
 import { AdminUsers } from './pages/admin/AdminUsers'
@@ -24,6 +25,9 @@ import { AdminBoosters } from './pages/admin/AdminBoosters'
 import { AdminReferrals } from './pages/admin/AdminReferrals'
 import { AdminLogs } from './pages/admin/AdminLogs'
 import { AdminSettings } from './pages/admin/AdminSettings'
+import { AdminViralProducts } from './pages/admin/AdminViralProducts'
+import { AdminViralVideos } from './pages/admin/AdminViralVideos'
+import { AdminViralCreators } from './pages/admin/AdminViralCreators'
 import { TermsPage } from './pages/TermsPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 
@@ -65,7 +69,7 @@ export default function App() {
           <Route path="/viral-creators" element={<ViralCreatorsPage />} />
           <Route path="/influencer" element={<StudioPage />} />
           <Route path="/booster" element={<BoostersPage />} />
-          <Route path="/booster/:tool" element={<PlaceholderPage title="Booster" />} />
+          <Route path="/booster/:tool" element={<BoosterDetailPage />} />
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/calculator" element={<CalculatorPage />} />
           <Route path="/referral" element={<ReferralPage />} />
@@ -76,6 +80,9 @@ export default function App() {
             <Route path="users" element={<AdminUsers />} />
             <Route path="credits" element={<AdminGenerations />} />
             <Route path="generations" element={<AdminGenerations />} />
+            <Route path="viral-products" element={<AdminViralProducts />} />
+            <Route path="viral-videos" element={<AdminViralVideos />} />
+            <Route path="viral-creators" element={<AdminViralCreators />} />
             <Route path="templates" element={<AdminTemplates />} />
             <Route path="boosters" element={<AdminBoosters />} />
             <Route path="referrals" element={<AdminReferrals />} />
@@ -90,13 +97,3 @@ export default function App() {
   )
 }
 
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div className="flex items-center justify-center h-64">
-      <div className="text-center">
-        <h2 className="text-xl font-bold text-white mb-2">{title}</h2>
-        <p className="text-white/40">Em desenvolvimento...</p>
-      </div>
-    </div>
-  )
-}
