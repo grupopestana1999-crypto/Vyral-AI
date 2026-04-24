@@ -3,6 +3,8 @@ import { FileText, Copy, Heart, Image as ImageIcon, Video, Check, Play } from 'l
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth-store'
 import { LazyVideo } from '../components/LazyVideo'
+import { useFetchList } from '../lib/useFetchList'
+import { ErrorState } from '../components/ErrorState'
 import { toast } from 'sonner'
 import type { PromptTemplate } from '../types/database'
 
@@ -32,23 +34,22 @@ function TemplateMedia({ template }: { template: PromptTemplate }) {
 
 export function TemplatesPage() {
   const { user } = useAuthStore()
-  const [templates, setTemplates] = useState<PromptTemplate[]>([])
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const [filter, setFilter] = useState<Filter>('all')
-  const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
 
-  useEffect(() => { load() }, [])
+  const { data: templates, loading, error, retry } = useFetchList<PromptTemplate>(
+    async () => {
+      const res = await supabase.from('prompt_templates').select('*').eq('is_active', true).order('created_at', { ascending: false })
+      return { data: res.data as PromptTemplate[] | null, error: res.error }
+    }
+  )
 
-  async function load() {
-    const [tmplRes, favRes] = await Promise.all([
-      supabase.from('prompt_templates').select('*').eq('is_active', true).order('created_at', { ascending: false }),
-      user ? supabase.from('template_favorites').select('template_id').eq('user_id', user.id) : Promise.resolve({ data: [] }),
-    ])
-    setTemplates(tmplRes.data ?? [])
-    setFavorites(new Set((favRes.data ?? []).map((f: { template_id: string }) => f.template_id)))
-    setLoading(false)
-  }
+  useEffect(() => {
+    if (!user) { setFavorites(new Set()); return }
+    supabase.from('template_favorites').select('template_id').eq('user_id', user.id)
+      .then(res => setFavorites(new Set((res.data ?? []).map((f: { template_id: string }) => f.template_id))))
+  }, [user])
 
   async function toggleFavorite(id: string) {
     if (!user) return
@@ -107,6 +108,8 @@ export function TemplatesPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => <div key={i} className="aspect-[9/16] bg-surface-300 rounded-xl animate-pulse" />)}
         </div>
+      ) : error ? (
+        <ErrorState message={error} onRetry={retry} />
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20">
           <FileText size={48} className="text-white/20 mb-3" />

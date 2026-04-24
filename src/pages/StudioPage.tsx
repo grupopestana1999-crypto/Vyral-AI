@@ -92,18 +92,35 @@ export function StudioPage() {
   const credits = subscription?.credits_remaining ?? 0
   const cost = TOOL_CREDITS.studio_image
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    let cancelled = false
+    const timeout = setTimeout(() => {
+      if (cancelled) return
+      toast.error('Tempo excedido ao carregar produtos. Recarregue a página.')
+    }, 12000)
 
-  async function loadData() {
-    const [prodRes, avatarRes, usageRes] = await Promise.all([
-      supabase.from('products').select('*').eq('is_active', true).order('heat_score', { ascending: false }).limit(30),
-      supabase.from('avatars').select('*').eq('is_active', true),
-      supabase.from('daily_image_usage').select('images_generated').eq('user_email', user?.email ?? '').eq('usage_date', new Date().toISOString().split('T')[0]).maybeSingle(),
-    ])
-    if (prodRes.data) setProducts(prodRes.data)
-    if (avatarRes.data) setAvatars(avatarRes.data)
-    if (usageRes.data) setTodayCount(usageRes.data.images_generated)
-  }
+    async function loadData() {
+      try {
+        const [prodRes, avatarRes, usageRes] = await Promise.all([
+          supabase.from('products').select('*').eq('is_active', true).order('heat_score', { ascending: false }).limit(30),
+          supabase.from('avatars').select('*').eq('is_active', true),
+          supabase.from('daily_image_usage').select('images_generated').eq('user_email', user?.email ?? '').eq('usage_date', new Date().toISOString().split('T')[0]).maybeSingle(),
+        ])
+        if (cancelled) return
+        if (prodRes.error) throw new Error(prodRes.error.message)
+        if (avatarRes.error) throw new Error(avatarRes.error.message)
+        if (prodRes.data) setProducts(prodRes.data)
+        if (avatarRes.data) setAvatars(avatarRes.data)
+        if (usageRes.data) setTodayCount(usageRes.data.images_generated)
+      } catch (err) {
+        if (!cancelled) toast.error('Erro ao carregar dados: ' + (err as Error).message)
+      } finally {
+        clearTimeout(timeout)
+      }
+    }
+    loadData()
+    return () => { cancelled = true; clearTimeout(timeout) }
+  }, [user?.email])
 
   function fileToDataUrl(onLoad: (v: string) => void) {
     return (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { ShoppingBag, TrendingUp, DollarSign, Flame, Package } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useFetchList } from '../lib/useFetchList'
+import { ErrorState } from '../components/ErrorState'
 import type { Product } from '../types/database'
 
 const CATEGORIES = ['Todos', 'Beleza', 'Calçados', 'Roupas', 'Perfumes', 'Equipamentos', 'Copos', 'Colares', 'Livros', 'Malas', 'Cama/Mesa']
@@ -10,20 +12,16 @@ function fmtCurrency(n: number) { return `R$ ${n.toLocaleString('pt-BR', { minim
 
 export function ViralProductsPage() {
   const [category, setCategory] = useState('Todos')
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
+  const { data: products, loading, error, retry } = useFetchList<Product>(
+    async () => {
       let q = supabase.from('products').select('*').eq('is_active', true).order('heat_score', { ascending: false })
       if (category !== 'Todos') q = q.eq('category', category)
-      const { data } = await q
-      setProducts(data ?? [])
-      setLoading(false)
-    }
-    load()
-  }, [category])
+      const res = await q
+      return { data: res.data as Product[] | null, error: res.error }
+    },
+    [category]
+  )
 
   return (
     <div className="space-y-6">
@@ -57,6 +55,8 @@ export function ViralProductsPage() {
             <div key={i} className="bg-surface-300 rounded-xl h-64 animate-pulse" />
           ))}
         </div>
+      ) : error ? (
+        <ErrorState message={error} onRetry={retry} />
       ) : products.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20">
           <Package size={48} className="text-white/20 mb-3" />
