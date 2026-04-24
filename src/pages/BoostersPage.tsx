@@ -1,25 +1,8 @@
 import { useNavigate } from 'react-router-dom'
-import { Zap, Coins, ArrowRight, Play } from 'lucide-react'
+import { Zap, Coins, ArrowRight } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
 import { BOOSTERS } from '../types/boosters'
-import { useRef, useEffect, useState } from 'react'
-
-function BoosterVideo({ url }: { url: string }) {
-  const ref = useRef<HTMLVideoElement>(null)
-  const [err, setErr] = useState(false)
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const io = new IntersectionObserver(
-      entries => entries.forEach(e => (e.isIntersecting ? el.play().catch(() => {}) : el.pause())),
-      { threshold: 0.1 }
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [])
-  if (err) return <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-900/40 to-accent-900/40"><Play size={28} className="text-white/30" /></div>
-  return <video ref={ref} src={url} className="w-full h-full object-cover" muted loop autoPlay playsInline preload="metadata" onError={() => setErr(true)} />
-}
+import { LazyVideo } from '../components/LazyVideo'
 
 export function BoostersPage() {
   const navigate = useNavigate()
@@ -53,7 +36,7 @@ export function BoostersPage() {
           >
             {/* Vídeo preview em loop ocupando todo o card */}
             <div className="absolute inset-0">
-              <BoosterVideo url={b.videoUrl} />
+              <LazyVideo src={b.videoUrl} className="w-full h-full object-cover" />
             </div>
 
             {/* Overlay gradient */}
