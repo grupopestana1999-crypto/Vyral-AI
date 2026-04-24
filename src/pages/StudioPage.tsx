@@ -94,32 +94,33 @@ export function StudioPage() {
 
   useEffect(() => {
     let cancelled = false
-    const timeout = setTimeout(() => {
-      if (cancelled) return
-      toast.error('Tempo excedido ao carregar produtos. Recarregue a página.')
-    }, 12000)
 
     async function loadData() {
       try {
-        const [prodRes, avatarRes, usageRes] = await Promise.all([
-          supabase.from('products').select('*').eq('is_active', true).order('heat_score', { ascending: false }).limit(30),
-          supabase.from('avatars').select('*').eq('is_active', true),
-          supabase.from('daily_image_usage').select('images_generated').eq('user_email', user?.email ?? '').eq('usage_date', new Date().toISOString().split('T')[0]).maybeSingle(),
+        const result = await Promise.race([
+          Promise.all([
+            supabase.from('products').select('*').eq('is_active', true).order('heat_score', { ascending: false }).limit(30),
+            supabase.from('avatars').select('*').eq('is_active', true),
+            supabase.from('daily_image_usage').select('images_generated').eq('user_email', user?.email ?? '').eq('usage_date', new Date().toISOString().split('T')[0]).maybeSingle(),
+          ]),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000)),
         ])
         if (cancelled) return
+        const [prodRes, avatarRes, usageRes] = result
         if (prodRes.error) throw new Error(prodRes.error.message)
         if (avatarRes.error) throw new Error(avatarRes.error.message)
         if (prodRes.data) setProducts(prodRes.data)
         if (avatarRes.data) setAvatars(avatarRes.data)
         if (usageRes.data) setTodayCount(usageRes.data.images_generated)
       } catch (err) {
-        if (!cancelled) toast.error('Erro ao carregar dados: ' + (err as Error).message)
-      } finally {
-        clearTimeout(timeout)
+        if (!cancelled) {
+          const msg = (err as Error).message
+          toast.error(msg === 'timeout' ? 'Tempo excedido ao carregar produtos. Recarregue a página.' : 'Erro ao carregar: ' + msg)
+        }
       }
     }
     loadData()
-    return () => { cancelled = true; clearTimeout(timeout) }
+    return () => { cancelled = true }
   }, [user?.email])
 
   function fileToDataUrl(onLoad: (v: string) => void) {

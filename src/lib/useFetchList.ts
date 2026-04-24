@@ -30,22 +30,27 @@ export function useFetchList<T>(
 
   useEffect(() => {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort('timeout'), timeoutMs)
     let cancelled = false
 
     async function run() {
       setLoading(true)
       setError(null)
       try {
-        const { data: result, error: qError } = await queryFn(controller.signal)
+        // Race entre a query e o timeout — supabase-js v2 não respeita AbortController externo
+        // por padrão, então precisamos forçar rejeição via race.
+        const result = await Promise.race([
+          queryFn(controller.signal),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs))
+        ])
         if (cancelled) return
+        const { data: rows, error: qError } = result
         if (qError) {
           const msg = qError instanceof Error ? qError.message : typeof qError === 'object' && qError && 'message' in qError
             ? String((qError as { message: unknown }).message)
             : String(qError)
           throw new Error(msg)
         }
-        setData(result ?? [])
+        setData(rows ?? [])
       } catch (err) {
         if (cancelled) return
         const msg = err instanceof Error ? err.message : String(err)
@@ -60,7 +65,6 @@ export function useFetchList<T>(
         }
       } finally {
         if (!cancelled) setLoading(false)
-        clearTimeout(timeoutId)
       }
     }
 
