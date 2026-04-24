@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Video, Eye, Heart, DollarSign, Film } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { LazyVideo } from '../components/LazyVideo'
+import { useFetchList } from '../lib/useFetchList'
+import { ErrorState } from '../components/ErrorState'
 import type { ProductVideo } from '../types/database'
 
 const CATEGORIES = ['Todos', 'Beleza', 'Calçados', 'Roupas', 'Perfumes', 'Equipamentos', 'Copos', 'Colares']
@@ -13,33 +15,27 @@ function fmtCurrency(n: number) { return `R$ ${n.toLocaleString('pt-BR', { minim
 export function ViralVideosPage() {
   const [category, setCategory] = useState('Todos')
   const [period, setPeriod] = useState(0)
-  const [videos, setVideos] = useState<ProductVideo[]>([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
+  const { data: allVideos, loading, error, retry } = useFetchList<ProductVideo>(
+    async () => {
       let q = supabase.from('product_videos')
         .select('*, products(id, name, image_url, category)')
         .order('revenue', { ascending: false })
         .limit(150)
-
       if (period > 0) {
         const since = new Date()
         since.setDate(since.getDate() - period)
         q = q.gte('published_at', since.toISOString())
       }
+      const res = await q
+      return { data: res.data as ProductVideo[] | null, error: res.error }
+    },
+    [period]
+  )
 
-      const { data } = await q
-      // Filtragem por categoria no cliente pra tolerar rows sem product_id linkado.
-      const filtered = category === 'Todos'
-        ? (data ?? [])
-        : (data ?? []).filter(v => (v.products as { category?: string } | null)?.category === category)
-      setVideos(filtered)
-      setLoading(false)
-    }
-    load()
-  }, [category, period])
+  const videos = category === 'Todos'
+    ? allVideos
+    : allVideos.filter(v => (v.products as { category?: string } | null)?.category === category)
 
   return (
     <div className="space-y-6">
@@ -76,6 +72,8 @@ export function ViralVideosPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => <div key={i} className="bg-surface-300 rounded-xl h-72 animate-pulse" />)}
         </div>
+      ) : error ? (
+        <ErrorState message={error} onRetry={retry} />
       ) : videos.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20">
           <Film size={48} className="text-white/20 mb-3" />

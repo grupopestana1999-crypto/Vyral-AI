@@ -1,23 +1,19 @@
-import { useState, useEffect } from 'react'
 import { Users, ExternalLink, DollarSign, UserCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useFetchList } from '../lib/useFetchList'
+import { ErrorState } from '../components/ErrorState'
 import type { Creator } from '../types/database'
 
 function fmt(n: number) { return n.toLocaleString('pt-BR') }
 function fmtCurrency(n: number) { return `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` }
 
 export function ViralCreatorsPage() {
-  const [creators, setCreators] = useState<Creator[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    async function load() {
-      const { data } = await supabase.from('creators').select('*').eq('is_active', true).order('projected_monthly_sales', { ascending: false })
-      setCreators(data ?? [])
-      setLoading(false)
+  const { data: creators, loading, error, retry } = useFetchList<Creator>(
+    async () => {
+      const res = await supabase.from('creators').select('*').eq('is_active', true).order('projected_monthly_sales', { ascending: false })
+      return { data: res.data as Creator[] | null, error: res.error }
     }
-    load()
-  }, [])
+  )
 
   const rankStyle = (i: number) => {
     if (i === 0) return 'bg-amber-500/20 text-amber-400 border-amber-500/30'
@@ -42,6 +38,8 @@ export function ViralCreatorsPage() {
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-16 bg-surface-300 rounded-xl animate-pulse" />)}
         </div>
+      ) : error ? (
+        <ErrorState message={error} onRetry={retry} />
       ) : creators.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20">
           <UserCheck size={48} className="text-white/20 mb-3" />
