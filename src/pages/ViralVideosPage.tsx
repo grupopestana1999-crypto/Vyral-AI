@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Video, Eye, Heart, DollarSign, Film } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { LazyVideo } from '../components/LazyVideo'
 import type { ProductVideo } from '../types/database'
 
 const CATEGORIES = ['Todos', 'Beleza', 'Calçados', 'Roupas', 'Perfumes', 'Equipamentos', 'Copos', 'Colares']
@@ -19,11 +20,10 @@ export function ViralVideosPage() {
     async function load() {
       setLoading(true)
       let q = supabase.from('product_videos')
-        .select('*, products!inner(id, name, image_url, category)')
+        .select('*, products(id, name, image_url, category)')
         .order('revenue', { ascending: false })
         .limit(150)
 
-      if (category !== 'Todos') q = q.eq('products.category', category)
       if (period > 0) {
         const since = new Date()
         since.setDate(since.getDate() - period)
@@ -31,7 +31,11 @@ export function ViralVideosPage() {
       }
 
       const { data } = await q
-      setVideos(data ?? [])
+      // Filtragem por categoria no cliente pra tolerar rows sem product_id linkado.
+      const filtered = category === 'Todos'
+        ? (data ?? [])
+        : (data ?? []).filter(v => (v.products as { category?: string } | null)?.category === category)
+      setVideos(filtered)
       setLoading(false)
     }
     load()
@@ -82,10 +86,10 @@ export function ViralVideosPage() {
           {videos.map(v => (
             <div key={v.id} className="bg-surface-300 border border-white/5 rounded-xl overflow-hidden hover:border-primary-500/30 transition-all">
               <div className="relative h-44 bg-surface-400">
-                {v.thumbnail_url ? (
-                  <img src={v.thumbnail_url} alt={v.title ?? ''} className="w-full h-full object-cover" />
-                ) : v.video_url ? (
-                  <video src={v.video_url} className="w-full h-full object-cover" muted preload="metadata" />
+                {v.video_url ? (
+                  <LazyVideo src={v.video_url} poster={v.thumbnail_url ?? undefined} className="w-full h-full object-cover" fallbackImage={v.thumbnail_url ?? undefined} />
+                ) : v.thumbnail_url ? (
+                  <img src={v.thumbnail_url} alt={v.title ?? ''} className="w-full h-full object-cover" loading="lazy" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center"><Film size={32} className="text-white/10" /></div>
                 )}
@@ -93,8 +97,8 @@ export function ViralVideosPage() {
               <div className="p-3 space-y-2">
                 <p className="text-sm font-medium text-white line-clamp-2 leading-tight">{v.title ?? 'Sem título'}</p>
                 <div className="flex items-center gap-2">
-                  {v.creator_avatar_url && <img src={v.creator_avatar_url} alt="" className="w-5 h-5 rounded-full" />}
-                  <span className="text-xs text-white/40">{v.creator_name ?? 'Desconhecido'}</span>
+                  {v.creator_avatar_url && <img src={v.creator_avatar_url} alt="" className="w-5 h-5 rounded-full" loading="lazy" />}
+                  <span className="text-xs text-white/40">{v.creator_name ?? (v.products as { name?: string } | null)?.name ?? 'Criador'}</span>
                 </div>
                 <div className="flex items-center gap-3 text-[11px] text-white/40 pt-2 border-t border-white/5">
                   <span className="flex items-center gap-1"><Eye size={10} /> {fmt(v.views)}</span>
