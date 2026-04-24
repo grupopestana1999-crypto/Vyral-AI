@@ -1,50 +1,31 @@
-import { useState, useEffect, useRef } from 'react'
-import { FileText, Copy, Heart, Image, Video, Check, Play } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { FileText, Copy, Heart, Image as ImageIcon, Video, Check, Play } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth-store'
+import { LazyVideo } from '../components/LazyVideo'
 import { toast } from 'sonner'
 import type { PromptTemplate } from '../types/database'
 
 type Filter = 'all' | 'video' | 'image' | 'favorites'
 
 function TemplateMedia({ template }: { template: PromptTemplate }) {
-  const [errored, setErrored] = useState(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
-
-  useEffect(() => {
-    // Pausa vídeo quando fora da viewport pra performance
-    const el = videoRef.current
-    if (!el) return
-    const observer = new IntersectionObserver(
-      entries => entries.forEach(e => { e.isIntersecting ? el.play().catch(() => {}) : el.pause() }),
-      { threshold: 0.1 }
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
-
-  if (template.type === 'video' && template.media_url && !errored) {
+  if (template.type === 'video' && template.media_url) {
     return (
-      <video
-        ref={videoRef}
+      <LazyVideo
         src={template.media_url}
         poster={template.thumbnail_url ?? undefined}
         className="w-full h-full object-cover"
-        muted
-        loop
-        autoPlay
-        playsInline
-        preload="metadata"
-        onError={() => setErrored(true)}
+        fallbackImage={template.thumbnail_url ?? undefined}
+        fallbackIcon={<Play size={32} className="text-white/30" />}
       />
     )
   }
-  if (template.thumbnail_url && !errored) {
-    return <img src={template.thumbnail_url} alt={template.title} className="w-full h-full object-cover" onError={() => setErrored(true)} />
+  if (template.thumbnail_url) {
+    return <img src={template.thumbnail_url} alt={template.title} className="w-full h-full object-cover" loading="lazy" />
   }
   return (
     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-900/40 to-accent-900/40">
-      {template.type === 'video' ? <Play size={32} className="text-white/30" /> : <Image size={32} className="text-white/30" />}
+      {template.type === 'video' ? <Play size={32} className="text-white/30" /> : <ImageIcon size={32} className="text-white/30" />}
     </div>
   )
 }
@@ -97,7 +78,7 @@ export function TemplatesPage() {
   const FILTERS: { key: Filter; label: string; icon: React.ReactNode }[] = [
     { key: 'all', label: 'Todos', icon: <FileText size={14} /> },
     { key: 'video', label: 'Vídeos', icon: <Video size={14} /> },
-    { key: 'image', label: 'Imagens', icon: <Image size={14} /> },
+    { key: 'image', label: 'Imagens', icon: <ImageIcon size={14} /> },
     { key: 'favorites', label: 'Favoritos', icon: <Heart size={14} /> },
   ]
 

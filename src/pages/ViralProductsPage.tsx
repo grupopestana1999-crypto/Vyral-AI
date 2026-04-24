@@ -68,7 +68,7 @@ export function ViralProductsPage() {
             <div key={p.id} className="bg-surface-300 border border-white/5 rounded-xl overflow-hidden hover:border-primary-500/30 transition-all group">
               <div className="relative h-40 bg-surface-400">
                 {p.image_url ? (
-                  <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                  <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center"><Package size={32} className="text-white/10" /></div>
                 )}

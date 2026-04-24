@@ -55,7 +55,7 @@ export function ViralCreatorsPage() {
                 {i + 1}
               </div>
               {c.avatar_url ? (
-                <img src={c.avatar_url} alt={c.name} className="w-11 h-11 rounded-full object-cover ring-2 ring-white/10" />
+                <img src={c.avatar_url} alt={c.name} className="w-11 h-11 rounded-full object-cover ring-2 ring-white/10" loading="lazy" />
               ) : (
                 <div className="w-11 h-11 rounded-full bg-surface-400 flex items-center justify-center"><Users size={18} className="text-white/20" /></div>
               )}
