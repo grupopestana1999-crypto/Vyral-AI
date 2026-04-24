@@ -6,6 +6,7 @@ import { TOOL_CREDITS } from '../types/credits'
 import { toast } from 'sonner'
 import type { Product, Avatar } from '../types/database'
 import { POSES, STYLES, FORMATS, ENHANCEMENTS, SCENARIOS } from '../types/studio'
+import { PromptGeneratorPanel } from '../components/studio/PromptGeneratorPanel'
 
 function Panel({ title, subtitle, icon, children, defaultOpen = false }: {
   title: string
@@ -402,6 +403,8 @@ export function StudioPage() {
               </div>
             )}
           </div>
+
+          {result && <PromptGeneratorPanel />}
 
           <div className="flex items-center justify-between text-sm text-white/50">
             <div className="flex items-center gap-1">
