@@ -1,20 +1,39 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Mail, Lock, ArrowLeft, Loader2 } from 'lucide-react'
+import { Sparkles, Mail, Lock, ArrowLeft, Loader2, Gift } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth-store'
+import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import logoImg from '../assets/logo.png'
 
 type Tab = 'login' | 'register' | 'forgot'
+
+const REF_PATTERN = /^VYRAL-[A-Z0-9]{6}$/
 
 export function AuthPage() {
   const [tab, setTab] = useState<Tab>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [referralCode, setReferralCode] = useState<string | null>(null)
   const { signIn, signUp, resetPassword } = useAuthStore()
   const navigate = useNavigate()
+
+  // Captura ?ref= na URL e salva em localStorage
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ref = params.get('ref')
+    if (ref && REF_PATTERN.test(ref)) {
+      localStorage.setItem('vyral_ref', ref)
+      setReferralCode(ref)
+      setTab('register')
+      toast.success(`Cadastre-se pra o amigo ${ref} ganhar créditos`, { duration: 5000 })
+    } else {
+      const stored = localStorage.getItem('vyral_ref')
+      if (stored && REF_PATTERN.test(stored)) setReferralCode(stored)
+    }
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -32,6 +51,15 @@ export function AuthPage() {
       if (error) {
         toast.error(error)
       } else {
+        // Se veio com referral, registra pending
+        if (referralCode) {
+          try {
+            await supabase.from('referrals_pending').insert({
+              referral_code: referralCode,
+              invited_email: email,
+            })
+          } catch { /* best-effort; fallback do webhook por email ainda funciona */ }
+        }
         toast.success('Conta criada! Verifique seu e-mail.')
         setTab('login')
       }
@@ -59,6 +87,16 @@ export function AuthPage() {
             {tab === 'forgot' && 'Informe seu e-mail para recuperar sua senha'}
           </p>
         </div>
+
+        {referralCode && tab === 'register' && (
+          <div className="mb-4 flex items-center gap-2 p-3 rounded-xl bg-primary-600/10 border border-primary-500/30">
+            <Gift size={16} className="text-primary-400 flex-shrink-0" />
+            <div>
+              <p className="text-xs text-white font-medium">Indicado por <span className="font-bold">{referralCode}</span></p>
+              <p className="text-[10px] text-white/60">Seu amigo ganha até 300 créditos quando você comprar um plano.</p>
+            </div>
+          </div>
+        )}
 
         <div className="bg-surface-300 rounded-2xl border border-white/5 p-6">
           {tab !== 'forgot' && (
