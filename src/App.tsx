@@ -16,6 +16,7 @@ import { CalculatorPage } from './pages/CalculatorPage'
 import { ReferralPage } from './pages/ReferralPage'
 import { CreditsPage } from './pages/CreditsPage'
 import { BoosterDetailPage } from './pages/BoosterDetailPage'
+import { EditImagePage } from './pages/EditImagePage'
 import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminDashboard } from './pages/admin/AdminDashboard'
 import { AdminUsers } from './pages/admin/AdminUsers'
@@ -69,6 +70,7 @@ export default function App() {
           <Route path="/viral-creators" element={<ViralCreatorsPage />} />
           <Route path="/influencer" element={<StudioPage />} />
           <Route path="/booster" element={<BoostersPage />} />
+          <Route path="/booster/edit-image" element={<EditImagePage />} />
           <Route path="/booster/:tool" element={<BoosterDetailPage />} />
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/calculator" element={<CalculatorPage />} />
