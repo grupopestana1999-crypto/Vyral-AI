@@ -5,11 +5,13 @@ export interface BoosterDef {
   description: string
   videoUrl: string
   credits: number
-  tool: keyof typeof import('./credits').TOOL_CREDITS | 'studio_redirect'
+  tool: keyof typeof import('./credits').TOOL_CREDITS | 'studio_redirect' | 'influencer_lab'
   edgeFunction?: string
   inputs: BoosterInput[]
   resultType: 'text' | 'image' | 'video' | 'queued'
   isFree?: boolean
+  locked?: boolean
+  emptyStateText?: string
 }
 
 export interface BoosterInput {
@@ -28,10 +30,10 @@ export const BOOSTERS: BoosterDef[] = [
     id: 'influencer-lab',
     slug: 'influencer-lab',
     title: 'Influencer Lab',
-    description: 'Workflow visual pra criar imagens UGC com influencers virtuais',
+    description: 'Workflow visual por nodes pra criar imagens UGC com influencers virtuais',
     videoUrl: 'https://static.higgsfield.ai/explore/soul-character.mp4',
     credits: 5,
-    tool: 'studio_redirect',
+    tool: 'influencer_lab',
     inputs: [],
     resultType: 'image',
     isFree: false,
@@ -41,15 +43,16 @@ export const BOOSTERS: BoosterDef[] = [
     slug: 'grok',
     title: 'Grok IA',
     description: 'Transforme imagens em vídeos com Grok AI',
-    videoUrl: 'https://static.higgsfield.ai/explore/grok-imagine.mp4',
+    videoUrl: 'https://static.higgsfield.ai/explore/lipsync-studio.mp4',
     credits: 55,
     tool: 'grok_video',
     edgeFunction: 'generate-grok-video',
     inputs: [
+      { key: 'prompt', label: 'Descreva o vídeo que deseja criar', type: 'textarea', placeholder: 'Ex: pessoa segurando o produto e sorrindo pra câmera', required: true },
       { key: 'image_url', label: 'Imagem de referência', type: 'image', required: true },
-      { key: 'prompt', label: 'Descrição do movimento', type: 'textarea', placeholder: 'Ex: pessoa segurando o produto e sorrindo', required: true },
     ],
     resultType: 'queued',
+    emptyStateText: 'Crie vídeos a partir de uma imagem usando o Grok IA',
   },
   {
     id: 'image-edit',
@@ -82,6 +85,7 @@ export const BOOSTERS: BoosterDef[] = [
     ],
     resultType: 'text',
     isFree: true,
+    locked: true,
   },
   {
     id: 'nano-banana',
@@ -96,6 +100,7 @@ export const BOOSTERS: BoosterDef[] = [
       { key: 'scene', label: 'Descreva a cena', type: 'textarea', placeholder: 'Ex: influencer em estúdio com iluminação profissional', required: true },
     ],
     resultType: 'image',
+    locked: true,
   },
   {
     id: 'nano-banana-2',
@@ -111,6 +116,7 @@ export const BOOSTERS: BoosterDef[] = [
       { key: 'reference_image', label: 'Imagem de referência (opcional)', type: 'image' },
     ],
     resultType: 'image',
+    locked: true,
   },
   {
     id: 'veo-video',
@@ -126,6 +132,7 @@ export const BOOSTERS: BoosterDef[] = [
       { key: 'image_url', label: 'Imagem inicial (opcional)', type: 'image' },
     ],
     resultType: 'queued',
+    locked: true,
   },
   {
     id: 'motion-control',
@@ -141,6 +148,7 @@ export const BOOSTERS: BoosterDef[] = [
       { key: 'motion_prompt', label: 'Movimento desejado', type: 'textarea', placeholder: 'Ex: acenar com a mão direita', required: true },
     ],
     resultType: 'queued',
+    locked: true,
   },
   {
     id: 'human-engine',
@@ -156,6 +164,7 @@ export const BOOSTERS: BoosterDef[] = [
       { key: 'motion_prompt', label: 'Descreva o movimento desejado', type: 'textarea', placeholder: 'Ex: andando na rua olhando pra câmera e sorrindo', required: true },
     ],
     resultType: 'queued',
+    locked: true,
   },
   {
     id: 'avatar-builder',
@@ -167,6 +176,7 @@ export const BOOSTERS: BoosterDef[] = [
     tool: 'studio_redirect',
     inputs: [],
     resultType: 'image',
+    locked: true,
   },
   {
     id: 'kling3-video',
@@ -182,6 +192,7 @@ export const BOOSTERS: BoosterDef[] = [
       { key: 'image_url', label: 'Imagem inicial (opcional)', type: 'image' },
     ],
     resultType: 'queued',
+    locked: true,
   },
   {
     id: 'skin-enhancer',
@@ -196,6 +207,7 @@ export const BOOSTERS: BoosterDef[] = [
       { key: 'image_url', label: 'Imagem para aprimorar', type: 'image', required: true },
     ],
     resultType: 'image',
+    locked: true,
   },
   {
     id: 'sora-remover',
@@ -210,6 +222,7 @@ export const BOOSTERS: BoosterDef[] = [
       { key: 'video_url', label: 'URL do vídeo Sora', type: 'text', placeholder: 'Cole a URL do vídeo', required: true },
     ],
     resultType: 'queued',
+    locked: true,
   },
 ]
 

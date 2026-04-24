@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { useParams, Navigate, useNavigate } from 'react-router-dom'
+import { useParams, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { ArrowLeft, Zap, Coins, Loader2, Upload, Play, Sparkles } from 'lucide-react'
 import { BOOSTER_BY_SLUG, type BoosterInput } from '../types/boosters'
 import { useAuthStore } from '../stores/auth-store'
@@ -93,10 +93,16 @@ export function BoosterDetailPage() {
   const { tool } = useParams<{ tool: string }>()
   const booster = tool ? BOOSTER_BY_SLUG[tool] : undefined
   const navigate = useNavigate()
+  const location = useLocation()
   const { subscription } = useAuthStore()
   const [values, setValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {}
-    booster?.inputs.forEach(i => { init[i.key] = i.type === 'radio' && i.options?.[0] ? i.options[0].value : '' })
+    const qs = new URLSearchParams(location.search)
+    const prefillPrompt = qs.get('prompt')
+    booster?.inputs.forEach(i => {
+      if (i.key === 'prompt' && prefillPrompt) init[i.key] = prefillPrompt
+      else init[i.key] = i.type === 'radio' && i.options?.[0] ? i.options[0].value : ''
+    })
     return init
   })
   const [generating, setGenerating] = useState(false)
@@ -104,7 +110,9 @@ export function BoosterDetailPage() {
   const [error, setError] = useState<string | null>(null)
 
   if (!booster) return <Navigate to="/booster" replace />
+  if (booster.locked) return <Navigate to="/booster" replace />
   if (booster.tool === 'studio_redirect') return <Navigate to="/influencer" replace />
+  if (booster.tool === 'influencer_lab') return <Navigate to="/booster/influencer-lab" replace />
 
   const credits = subscription?.credits_remaining ?? 0
   const hasInsufficientCredits = booster.credits > 0 && credits < booster.credits
@@ -262,7 +270,7 @@ export function BoosterDetailPage() {
                   <Sparkles size={22} className="text-primary-400" />
                 </div>
                 <p className="text-white/50 text-sm">Seu resultado aparecerá aqui</p>
-                <p className="text-white/30 text-xs mt-1">Preencha as configurações e clique em Gerar</p>
+                <p className="text-white/30 text-xs mt-1">{booster.emptyStateText ?? 'Preencha as configurações e clique em Gerar'}</p>
               </div>
             </div>
           )}
