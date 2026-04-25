@@ -153,7 +153,7 @@ export function ViralVideosPage() {
               <div key={v.id} className="group relative bg-surface-300 border border-white/5 rounded-xl overflow-hidden aspect-[9/16] hover:border-primary-500/40 transition-all">
                 <div className="absolute inset-0">
                   {v.video_url ? (
-                    <LazyVideo src={v.video_url} poster={v.thumbnail_url ?? undefined} className="w-full h-full object-cover" fallbackImage={v.thumbnail_url ?? undefined} />
+                    <LazyVideo src={v.video_url} poster={v.thumbnail_url ?? undefined} className="w-full h-full" fallbackImage={v.thumbnail_url ?? undefined} interactive />
                   ) : v.thumbnail_url ? (
                     <img src={v.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" />
                   ) : (

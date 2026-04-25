@@ -32,7 +32,8 @@ export function ReferralPage() {
   async function generateCode() {
     if (!user) return
     const code = `VYRAL-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
-    const link = `${window.location.origin}/auth?ref=${code}`
+    // Link aponta pra checkout público que repassa o sck pro Hotmart
+    const link = `${window.location.origin}/comprar?ref=${code}`
     const { data, error } = await supabase.from('referral_codes').insert({ user_id: user.id, code, link }).select().single()
     if (error) { toast.error('Erro ao gerar código'); return }
     setReferralCode(data)
