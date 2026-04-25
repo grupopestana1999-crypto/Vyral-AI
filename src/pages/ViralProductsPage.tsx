@@ -69,7 +69,11 @@ export function ViralProductsPage() {
         </div>
       </div>
 
-      <SystemOnlineBanner />
+      <SystemOnlineBanner
+        totalCount={allProducts.length}
+        totalRevenue={allProducts.reduce((sum, p) => sum + (Number(p.revenue) || 0), 0)}
+        countLabel="produtos"
+      />
 
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
         {FILTERS.map((f, i) => (

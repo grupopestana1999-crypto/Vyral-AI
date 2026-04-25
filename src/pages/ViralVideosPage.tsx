@@ -114,7 +114,11 @@ export function ViralVideosPage() {
         </div>
       </div>
 
-      <SystemOnlineBanner />
+      <SystemOnlineBanner
+        totalCount={videos.length}
+        totalRevenue={videos.reduce((sum, v) => sum + (Number(v.revenue) || 0), 0)}
+        countLabel="vídeos"
+      />
 
       <div className="flex gap-2 justify-end">
         {PERIODS.map(p => (

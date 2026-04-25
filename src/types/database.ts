@@ -1,8 +1,6 @@
 export type PlanType = 'starter' | 'creator' | 'pro'
 export type UserRole = 'user' | 'admin' | 'super_admin'
 export type SubscriptionStatus = 'active' | 'approved' | 'expired' | 'cancelled'
-export type GenerationStatus = 'queued' | 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
-
 export interface Subscription {
   id: string
   customer_email: string
@@ -141,23 +139,3 @@ export interface ReferralConversion {
   created_at: string
 }
 
-export interface Notification {
-  id: string
-  title: string
-  message: string
-  type: string
-  is_active: boolean
-  created_at: string
-}
-
-export interface VideoGenerationQueue {
-  id: string
-  user_email: string
-  tool_name: string
-  status: GenerationStatus
-  input_payload: Record<string, unknown>
-  output_url: string | null
-  error_message: string | null
-  created_at: string
-  completed_at: string | null
-}

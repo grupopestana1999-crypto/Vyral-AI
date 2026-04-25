@@ -2,6 +2,7 @@ import { Users, ExternalLink, DollarSign, UserCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useFetchList } from '../lib/useFetchList'
 import { ErrorState } from '../components/ErrorState'
+import { SystemOnlineBanner } from '../components/SystemOnlineBanner'
 import type { Creator } from '../types/database'
 
 function fmt(n: number) { return n.toLocaleString('pt-BR') }
@@ -33,6 +34,12 @@ export function ViralCreatorsPage() {
           <p className="text-sm text-white/50">Ranking dos criadores que mais faturam</p>
         </div>
       </div>
+
+      <SystemOnlineBanner
+        totalCount={creators.length}
+        totalRevenue={creators.reduce((sum, c) => sum + (Number(c.projected_monthly_sales) || 0), 0)}
+        countLabel="criadores"
+      />
 
       {loading ? (
         <div className="space-y-2">

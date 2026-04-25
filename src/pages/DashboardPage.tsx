@@ -154,7 +154,7 @@ export function DashboardPage() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Video size={16} className="text-primary-400" />
-              <h3 className="text-sm font-semibold text-white">Top Vídeos</h3>
+              <h3 className="text-sm font-semibold text-white">Top Vídeos Virais</h3>
             </div>
             <Link to="/viral-videos" className="text-xs text-primary-400 hover:text-primary-300">Ver Todos</Link>
           </div>
