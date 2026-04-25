@@ -136,7 +136,7 @@ export function ViralProductsPage() {
                   </div>
                   <div>
                     <p className="text-[9px] text-white/40 uppercase">Vendidos</p>
-                    <p className="text-sm font-bold text-white">{fmtCount(p.items_sold)}</p>
+                    <p className="text-sm font-bold text-white">{fmtCount(p.sales || p.items_sold)}</p>
                   </div>
                 </div>
               </div>

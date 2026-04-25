@@ -160,18 +160,12 @@ export function ViralProductDetailPage() {
             </div>
             <div>
               <p className="text-[10px] text-white/40 uppercase">Vendidos</p>
-              <p className="text-xl font-bold text-white">{fmtCount(product.items_sold)}</p>
+              <p className="text-xl font-bold text-white">{fmtCount(product.sales || product.items_sold)}</p>
             </div>
-            {product.commission_rate != null && (
+            {product.commission_rate != null && product.commission_rate > 0 && (
               <div>
                 <p className="text-[10px] text-white/40 uppercase">Comissão</p>
                 <p className="text-sm font-bold text-white">{product.commission_rate}%</p>
-              </div>
-            )}
-            {product.sales != null && product.sales > 0 && (
-              <div>
-                <p className="text-[10px] text-white/40 uppercase">Sales</p>
-                <p className="text-sm font-bold text-white">{fmtCount(product.sales)}</p>
               </div>
             )}
           </div>

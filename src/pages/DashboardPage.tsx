@@ -140,7 +140,7 @@ export function DashboardPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-white truncate font-medium">{p.name}</p>
                   <div className="flex items-center gap-3 text-[11px] mt-0.5">
-                    <span className="text-white/50">{fmtCount(p.items_sold)} vendidos</span>
+                    <span className="text-white/50">{fmtCount(p.sales || p.items_sold)} vendidos</span>
                     <span className="text-emerald-400 font-semibold">{fmtCurrency(p.revenue)}</span>
                   </div>
                 </div>
