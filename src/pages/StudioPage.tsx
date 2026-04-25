@@ -106,13 +106,13 @@ export function StudioPage() {
       const raw = localStorage.getItem(STUDIO_SESSION_KEY)
       if (raw) {
         const parsed = JSON.parse(raw) as StudioSession
-        // Se há geração done há mais de 24h, ignora (resultado expira no Supabase storage)
-        if (parsed.status === 'done' && parsed.generatedAt && Date.now() - parsed.generatedAt > 24 * 3600_000) {
-          return { status: 'idle', resultUrl: null, errorMessage: null }
-        }
-        // Se ficou em generating perdido (recarregou no meio), volta pra idle (vai precisar gerar de novo)
         if (parsed.status === 'generating') {
           return { status: 'idle', resultUrl: null, errorMessage: null }
+        }
+        if (parsed.status === 'done') {
+          const validUrl = typeof parsed.resultUrl === 'string' && /^https?:\/\//.test(parsed.resultUrl)
+          const fresh = parsed.generatedAt && Date.now() - parsed.generatedAt < 24 * 3600_000
+          if (!validUrl || !fresh) return { status: 'idle', resultUrl: null, errorMessage: null }
         }
         return parsed
       }
@@ -230,8 +230,8 @@ export function StudioPage() {
         toast.error(data.error)
         return
       }
-      const url = data?.image_url || data?.result
-      if (url) {
+      const url = data?.image_url
+      if (typeof url === 'string' && /^https?:\/\//.test(url)) {
         setSession(s => ({ ...s, status: 'done', resultUrl: url, generatedAt: Date.now() }))
         toast.success('Gerado com sucesso!')
         setTodayCount(prev => prev + 1)
