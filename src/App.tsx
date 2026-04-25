@@ -7,6 +7,7 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { AuthPage } from './pages/AuthPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { ViralProductsPage } from './pages/ViralProductsPage'
+import { ViralProductDetailPage } from './pages/ViralProductDetailPage'
 import { ViralVideosPage } from './pages/ViralVideosPage'
 import { ViralCreatorsPage } from './pages/ViralCreatorsPage'
 import { StudioPage } from './pages/StudioPage'
@@ -67,6 +68,7 @@ export default function App() {
         >
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/viral-products" element={<ViralProductsPage />} />
+          <Route path="/viral-products/:id" element={<ViralProductDetailPage />} />
           <Route path="/viral-videos" element={<ViralVideosPage />} />
           <Route path="/viral-creators" element={<ViralCreatorsPage />} />
           <Route path="/influencer" element={<StudioPage />} />
