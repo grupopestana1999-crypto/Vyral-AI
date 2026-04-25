@@ -33,6 +33,7 @@ import { AdminViralVideos } from './pages/admin/AdminViralVideos'
 import { AdminViralCreators } from './pages/admin/AdminViralCreators'
 import { TermsPage } from './pages/TermsPage'
 import { PrivacyPage } from './pages/PrivacyPage'
+import { PublicCheckoutPage } from './pages/PublicCheckoutPage'
 
 export default function App() {
   const initialize = useAuthStore((s: { initialize: () => Promise<void> }) => s.initialize)
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/comprar" element={<PublicCheckoutPage />} />
 
         <Route
           element={

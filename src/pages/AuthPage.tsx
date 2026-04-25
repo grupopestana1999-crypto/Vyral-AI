@@ -47,6 +47,25 @@ export function AuthPage() {
         navigate('/dashboard')
       }
     } else if (tab === 'register') {
+      // Gate de signup: só permite cadastro de email que já comprou um plano via Hotmart.
+      // O webhook hotmart-webhook cria a subscription ANTES do signup.
+      try {
+        const { data: eligible, error: chkErr } = await supabase.rpc('email_has_subscription', { _email: email })
+        if (chkErr) throw new Error(chkErr.message)
+        if (!eligible) {
+          toast.error('Esse email ainda não comprou nenhum plano. Compre primeiro pra criar sua conta.', { duration: 6000 })
+          setLoading(false)
+          // Manda pra página de compra mantendo ref, se houver
+          const ref = localStorage.getItem('vyral_ref')
+          navigate(ref ? `/comprar?ref=${ref}` : '/comprar')
+          return
+        }
+      } catch (err) {
+        toast.error('Erro ao validar elegibilidade: ' + (err as Error).message)
+        setLoading(false)
+        return
+      }
+
       const { error } = await signUp(email, password)
       if (error) {
         toast.error(error)

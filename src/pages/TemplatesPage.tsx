@@ -22,8 +22,10 @@ function TemplateMedia({ template }: { template: PromptTemplate }) {
       />
     )
   }
-  if (template.thumbnail_url) {
-    return <img src={template.thumbnail_url} alt={template.title} className="w-full h-full object-cover" loading="lazy" />
+  // Pra type=image: usar media_url (a imagem em si) com thumbnail como fallback
+  const imgSrc = template.type === 'image' ? (template.media_url ?? template.thumbnail_url) : template.thumbnail_url
+  if (imgSrc) {
+    return <img src={imgSrc} alt={template.title} className="w-full h-full object-cover" loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
   }
   return (
     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-900/40 to-accent-900/40">
@@ -52,13 +54,34 @@ export function TemplatesPage() {
   }, [user])
 
   async function toggleFavorite(id: string) {
-    if (!user) return
-    if (favorites.has(id)) {
-      await supabase.from('template_favorites').delete().eq('user_id', user.id).eq('template_id', id)
-      setFavorites(prev => { const s = new Set(prev); s.delete(id); return s })
-    } else {
-      await supabase.from('template_favorites').insert({ user_id: user.id, template_id: id })
-      setFavorites(prev => new Set(prev).add(id))
+    if (!user) {
+      toast.error('Faça login pra favoritar')
+      return
+    }
+    const wasFav = favorites.has(id)
+    // Optimistic update
+    setFavorites(prev => {
+      const s = new Set(prev)
+      if (wasFav) s.delete(id); else s.add(id)
+      return s
+    })
+    try {
+      if (wasFav) {
+        const { error } = await supabase.from('template_favorites').delete().eq('user_id', user.id).eq('template_id', id)
+        if (error) throw new Error(error.message)
+      } else {
+        const { error } = await supabase.from('template_favorites').insert({ user_id: user.id, template_id: id })
+        if (error) throw new Error(error.message)
+        toast.success('Adicionado aos favoritos')
+      }
+    } catch (err) {
+      // Rollback se a request falhou
+      setFavorites(prev => {
+        const s = new Set(prev)
+        if (wasFav) s.add(id); else s.delete(id)
+        return s
+      })
+      toast.error((err as Error).message || 'Erro ao atualizar favoritos. Recarregue a página.')
     }
   }
 

@@ -7,6 +7,19 @@ import { toast } from 'sonner'
 import type { Product, Avatar } from '../types/database'
 import { POSES, STYLES, FORMATS, ENHANCEMENTS, SCENARIOS } from '../types/studio'
 import { PromptGeneratorPanel } from '../components/studio/PromptGeneratorPanel'
+import { GenerationPreview } from '../components/studio/GenerationPreview'
+
+const STUDIO_SESSION_KEY = 'vyral_studio_session'
+
+interface StudioSession {
+  status: 'idle' | 'generating' | 'done' | 'error'
+  resultUrl: string | null
+  errorMessage: string | null
+  generatedAt?: number
+  productId?: string | null
+  productImage?: string | null
+  productName?: string | null
+}
 
 function Panel({ title, subtitle, icon, children, defaultOpen = false }: {
   title: string
@@ -65,6 +78,8 @@ export function StudioPage() {
   const [productTab, setProductTab] = useState<'viral' | 'upload'>('viral')
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [uploadedProduct, setUploadedProduct] = useState<string | null>(null)
+  // Quando produto tem additional_images, esse é o índice da variação selecionada (-1 = imagem principal)
+  const [selectedVariationIdx, setSelectedVariationIdx] = useState<number>(-1)
 
   // Painel Influencer
   const [influencerTab, setInfluencerTab] = useState<'ready' | 'upload'>('ready')
@@ -85,9 +100,34 @@ export function StudioPage() {
   const [format, setFormat] = useState('9:16')
   const [additionalInfo, setAdditionalInfo] = useState('')
 
-  const [generating, setGenerating] = useState(false)
-  const [result, setResult] = useState<string | null>(null)
+  // Estado consolidado da sessão de geração — persiste em localStorage
+  const [session, setSession] = useState<StudioSession>(() => {
+    try {
+      const raw = localStorage.getItem(STUDIO_SESSION_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as StudioSession
+        // Se há geração done há mais de 24h, ignora (resultado expira no Supabase storage)
+        if (parsed.status === 'done' && parsed.generatedAt && Date.now() - parsed.generatedAt > 24 * 3600_000) {
+          return { status: 'idle', resultUrl: null, errorMessage: null }
+        }
+        // Se ficou em generating perdido (recarregou no meio), volta pra idle (vai precisar gerar de novo)
+        if (parsed.status === 'generating') {
+          return { status: 'idle', resultUrl: null, errorMessage: null }
+        }
+        return parsed
+      }
+    } catch { /* ignore */ }
+    return { status: 'idle', resultUrl: null, errorMessage: null }
+  })
   const [todayCount, setTodayCount] = useState(0)
+  const generating = session.status === 'generating'
+
+  // Persist session em localStorage sempre que mudar
+  useEffect(() => {
+    try {
+      localStorage.setItem(STUDIO_SESSION_KEY, JSON.stringify(session))
+    } catch { /* quota / private mode */ }
+  }, [session])
 
   const credits = subscription?.credits_remaining ?? 0
   const cost = TOOL_CREDITS.studio_image
@@ -141,13 +181,28 @@ export function StudioPage() {
     })
   }
 
+  // Resolve qual imagem do produto usar (variation se selecionada, senão image_url principal)
+  function resolveProductImage(): string | null {
+    if (uploadedProduct) return uploadedProduct
+    if (!selectedProduct) return null
+    const variations = (selectedProduct.additional_images ?? []) as string[]
+    if (selectedVariationIdx >= 0 && variations[selectedVariationIdx]) return variations[selectedVariationIdx]
+    return selectedProduct.image_url
+  }
+
   async function handleGenerate() {
     if (credits < cost) { toast.error('Créditos insuficientes'); return }
-    const productSource = selectedProduct?.image_url ?? uploadedProduct
+    const productSource = resolveProductImage()
     if (!productSource) { toast.error('Selecione um produto ou faça upload'); return }
 
-    setGenerating(true)
-    setResult(null)
+    setSession({
+      status: 'generating',
+      resultUrl: null,
+      errorMessage: null,
+      productId: selectedProduct?.id ?? null,
+      productImage: productSource,
+      productName: selectedProduct?.name ?? 'Upload',
+    })
 
     const sceneText = selectedScenario ? SCENARIOS.find(s => s.id === selectedScenario)?.promptHint ?? '' : customScene || ''
     const enhancementList = Array.from(enhancements).map(id => ENHANCEMENTS.find(e => e.id === id)?.name).filter(Boolean).join(', ')
@@ -170,19 +225,30 @@ export function StudioPage() {
       })
 
       if (error) throw error
-      if (data?.error) { toast.error(data.error); return }
-      if (data?.image_url || data?.result) {
-        setResult(data.image_url || data.result)
+      if (data?.error) {
+        setSession(s => ({ ...s, status: 'error', errorMessage: data.error }))
+        toast.error(data.error)
+        return
+      }
+      const url = data?.image_url || data?.result
+      if (url) {
+        setSession(s => ({ ...s, status: 'done', resultUrl: url, generatedAt: Date.now() }))
         toast.success('Gerado com sucesso!')
         setTodayCount(prev => prev + 1)
       } else {
+        setSession(s => ({ ...s, status: 'error', errorMessage: 'Resposta inesperada da IA' }))
         toast.error('Resposta inesperada')
       }
     } catch (err) {
-      toast.error('Erro: ' + (err as Error).message)
-    } finally {
-      setGenerating(false)
+      const msg = (err as Error).message
+      setSession(s => ({ ...s, status: 'error', errorMessage: msg }))
+      toast.error('Erro: ' + msg)
     }
+  }
+
+  function regenerate() {
+    setSession({ status: 'idle', resultUrl: null, errorMessage: null })
+    void handleGenerate()
   }
 
   const femaleAvatars = avatars.filter(a => a.gender === 'female')
@@ -207,35 +273,61 @@ export function StudioPage() {
           <Panel title="Produto" subtitle={selectedProduct?.name ?? (uploadedProduct ? 'Upload feito' : 'Escolha um produto')} icon={<Package size={16} />} defaultOpen>
             <Tabs tabs={[{ id: 'viral', label: 'Produtos Virais' }, { id: 'upload', label: 'Upload' }]} active={productTab} onChange={(id) => setProductTab(id as 'viral' | 'upload')} />
             {productTab === 'viral' ? (
-              products.length === 0 ? (
-                <p className="text-sm text-white/40 text-center py-4">Nenhum produto viral cadastrado. Use Upload.</p>
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-64 overflow-y-auto">
-                  {products.map(p => (
-                    <button
-                      key={p.id}
-                      onClick={() => { setSelectedProduct(p); setUploadedProduct(null) }}
-                      className={`relative rounded-lg border-2 p-1 transition-all cursor-pointer ${
-                        selectedProduct?.id === p.id ? 'border-primary-500' : 'border-transparent hover:border-white/20'
-                      }`}
-                    >
-                      <div className="relative">
-                        {p.image_url ? (
-                          <img src={p.image_url} alt={p.name} className="w-full h-16 object-cover rounded" />
-                        ) : (
-                          <div className="w-full h-16 bg-surface-400 rounded flex items-center justify-center"><Package size={20} className="text-white/20" /></div>
-                        )}
-                        {p.heat_score >= 70 && (
-                          <span className="absolute top-0.5 right-0.5 flex items-center gap-0.5 px-1 py-0.5 rounded-full text-[8px] font-bold bg-red-500/80 text-white">
-                            <Flame size={8} /> {p.heat_score.toFixed(0)}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-white/60 truncate mt-1 text-left">{p.name}</p>
-                    </button>
-                  ))}
-                </div>
-              )
+              <>
+                {products.length === 0 ? (
+                  <p className="text-sm text-white/40 text-center py-4">Nenhum produto viral cadastrado. Use Upload.</p>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-64 overflow-y-auto">
+                    {products.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => { setSelectedProduct(p); setUploadedProduct(null); setSelectedVariationIdx(-1) }}
+                        className={`relative rounded-lg border-2 p-1 transition-all cursor-pointer ${
+                          selectedProduct?.id === p.id ? 'border-primary-500' : 'border-transparent hover:border-white/20'
+                        }`}
+                      >
+                        <div className="relative">
+                          {p.image_url ? (
+                            <img src={p.image_url} alt={p.name} className="w-full h-16 object-cover rounded" loading="lazy" />
+                          ) : (
+                            <div className="w-full h-16 bg-surface-400 rounded flex items-center justify-center"><Package size={20} className="text-white/20" /></div>
+                          )}
+                          {p.heat_score >= 70 && (
+                            <span className="absolute top-0.5 right-0.5 flex items-center gap-0.5 px-1 py-0.5 rounded-full text-[8px] font-bold bg-red-500/80 text-white">
+                              <Flame size={8} /> {p.heat_score.toFixed(0)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-white/60 truncate mt-1 text-left">{p.name}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Variations: aparece quando o produto selecionado tem additional_images */}
+                {selectedProduct && Array.isArray(selectedProduct.additional_images) && selectedProduct.additional_images.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-white/5">
+                    <p className="text-[11px] text-white/60 mb-2">Selecione a variação:</p>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      <button
+                        onClick={() => setSelectedVariationIdx(-1)}
+                        className={`flex-shrink-0 rounded-lg border-2 overflow-hidden transition-all cursor-pointer ${selectedVariationIdx === -1 ? 'border-primary-500' : 'border-transparent hover:border-white/20'}`}
+                      >
+                        <img src={selectedProduct.image_url} alt="Principal" className="w-12 h-12 object-cover" loading="lazy" />
+                      </button>
+                      {(selectedProduct.additional_images as string[]).map((url, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setSelectedVariationIdx(idx)}
+                          className={`flex-shrink-0 rounded-lg border-2 overflow-hidden transition-all cursor-pointer ${selectedVariationIdx === idx ? 'border-primary-500' : 'border-transparent hover:border-white/20'}`}
+                        >
+                          <img src={url} alt={`Variação ${idx + 1}`} className="w-12 h-12 object-cover" loading="lazy" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
               <div>
                 <label className="flex items-center gap-2 px-4 py-3 rounded-lg border border-dashed border-white/20 hover:border-primary-500 transition-colors cursor-pointer">
@@ -262,11 +354,19 @@ export function StudioPage() {
                       <button
                         key={a.id}
                         onClick={() => { setSelectedAvatar(a); setUploadedAvatar(null) }}
-                        className={`rounded-full border-2 overflow-hidden transition-all cursor-pointer ${
+                        className={`relative rounded-full border-2 overflow-hidden transition-all cursor-pointer bg-surface-400 ${
                           selectedAvatar?.id === a.id ? 'border-primary-500 scale-110' : 'border-transparent hover:border-white/20'
                         }`}
+                        style={{ aspectRatio: '1 / 1' }}
                       >
-                        <img src={a.image_url} alt={a.name} className="w-full aspect-square object-cover" loading="lazy" />
+                        <img
+                          src={a.image_url}
+                          alt={a.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                          onLoad={(e) => (e.currentTarget as HTMLImageElement).classList.add('opacity-100')}
+                        />
                       </button>
                     ))}
                   </div>
@@ -408,21 +508,20 @@ export function StudioPage() {
 
         {/* PREVIEW + GERAR */}
         <div className="space-y-4">
-          <div className="bg-surface-300 border border-white/5 rounded-xl p-6 min-h-[400px] flex items-center justify-center">
-            {result ? (
-              <img src={result} alt="Gerado" className="w-full rounded-lg" />
-            ) : (
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-primary-600/10 flex items-center justify-center mx-auto mb-3">
-                  <Sparkles size={24} className="text-primary-400" />
-                </div>
-                <p className="text-white/50 font-medium">Seu conteúdo aparecerá aqui</p>
-                <p className="text-white/30 text-sm">Configure e gere sua imagem</p>
-              </div>
-            )}
-          </div>
+          <GenerationPreview
+            status={session.status}
+            resultUrl={session.resultUrl}
+            errorMessage={session.errorMessage}
+            onRegenerate={regenerate}
+          />
 
-          {result && <PromptGeneratorPanel />}
+          {session.status === 'done' && session.resultUrl && (
+            <PromptGeneratorPanel
+              productName={session.productName ?? selectedProduct?.name ?? null}
+              productImage={session.productImage ?? null}
+              resultImage={session.resultUrl}
+            />
+          )}
 
           <div className="flex items-center justify-between text-sm text-white/50">
             <div className="flex items-center gap-1">
