@@ -35,8 +35,9 @@ export function CalculatorPage() {
   function projectionFor(convMult: number, ticketMult: number) {
     const adjustedConv = (conversionRate / 100) * convMult
     const adjustedTicket = avgTicket * ticketMult
-    // Pra cada post, assume views base = 1500 (média humilde de TikTok new account)
-    const viewsPerPost = 1500
+    // Saturação: até 25 posts/dia totais → 1500 views/post; acima dilui (mais oferta = menos atenção/post)
+    const totalDaily = Math.max(1, accounts * postsPerDay)
+    const viewsPerPost = totalDaily <= 25 ? 1500 : Math.max(250, 1500 * Math.sqrt(25 / totalDaily))
     const sales = postsPerMonth * viewsPerPost * adjustedConv
     const revenue = sales * adjustedTicket
     const commission = revenue * (commissionRate / 100)

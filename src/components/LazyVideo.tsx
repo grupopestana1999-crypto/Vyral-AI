@@ -31,7 +31,7 @@ export function LazyVideo({ src, className = '', poster, fallbackIcon, fallbackI
     return () => io.disconnect()
   }, [])
 
-  if (err) {
+  if (err || !src) {
     if (fallbackImage) {
       return <img src={fallbackImage} className={className} alt="" />
     }
