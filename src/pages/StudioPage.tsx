@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Sparkles, Upload, ChevronDown, ChevronUp, Image, Loader2, Coins, Flame, Package, User, Camera, SlidersHorizontal } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth-store'
@@ -8,8 +8,11 @@ import type { Product, Avatar } from '../types/database'
 import { POSES, STYLES, FORMATS, ENHANCEMENTS, SCENARIOS } from '../types/studio'
 import { PromptGeneratorPanel } from '../components/studio/PromptGeneratorPanel'
 import { GenerationPreview } from '../components/studio/GenerationPreview'
+import { resizeImageFile } from '../lib/imageUtils'
 
 const STUDIO_SESSION_KEY = 'vyral_studio_session'
+const STUDIO_SELECTIONS_KEY = 'vyral_studio_selections'
+const GENERATION_TIMEOUT_MS = 90_000
 
 interface StudioSession {
   status: 'idle' | 'generating' | 'done' | 'error'
@@ -19,6 +22,35 @@ interface StudioSession {
   productId?: string | null
   productImage?: string | null
   productName?: string | null
+  // Marca o início de uma geração para recovery após troca de aba/refresh
+  pendingSince?: number
+}
+
+interface StudioSelections {
+  productTab?: 'viral' | 'upload'
+  selectedProductId?: string | null
+  uploadedProduct?: string | null
+  selectedVariationIdx?: number
+  influencerTab?: 'ready' | 'upload'
+  influencerGender?: 'female' | 'male'
+  selectedAvatarId?: string | null
+  uploadedAvatar?: string | null
+  sceneTab?: 'ready' | 'upload' | 'custom'
+  selectedScenario?: string | null
+  uploadedScene?: string | null
+  customScene?: string
+  pose?: string
+  style?: string
+  enhancements?: string[]
+  format?: string
+  additionalInfo?: string
+}
+
+function loadSelections(): StudioSelections {
+  try {
+    const raw = localStorage.getItem(STUDIO_SELECTIONS_KEY)
+    return raw ? JSON.parse(raw) as StudioSelections : {}
+  } catch { return {} }
 }
 
 function Panel({ title, subtitle, icon, children, defaultOpen = false }: {
@@ -74,31 +106,39 @@ export function StudioPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [avatars, setAvatars] = useState<Avatar[]>([])
 
+  const persistedSelections = useRef<StudioSelections>(loadSelections())
+  const ps = persistedSelections.current
+
   // Painel Produto
-  const [productTab, setProductTab] = useState<'viral' | 'upload'>('viral')
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [uploadedProduct, setUploadedProduct] = useState<string | null>(null)
-  // Quando produto tem additional_images, esse é o índice da variação selecionada (-1 = imagem principal)
-  const [selectedVariationIdx, setSelectedVariationIdx] = useState<number>(-1)
+  const [productTab, setProductTab] = useState<'viral' | 'upload'>(ps.productTab ?? 'viral')
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(ps.selectedProductId ?? null)
+  const [uploadedProduct, setUploadedProduct] = useState<string | null>(ps.uploadedProduct ?? null)
+  const [selectedVariationIdx, setSelectedVariationIdx] = useState<number>(ps.selectedVariationIdx ?? -1)
 
   // Painel Influencer
-  const [influencerTab, setInfluencerTab] = useState<'ready' | 'upload'>('ready')
-  const [influencerGender, setInfluencerGender] = useState<'female' | 'male'>('female')
-  const [selectedAvatar, setSelectedAvatar] = useState<Avatar | null>(null)
-  const [uploadedAvatar, setUploadedAvatar] = useState<string | null>(null)
+  const [influencerTab, setInfluencerTab] = useState<'ready' | 'upload'>(ps.influencerTab ?? 'ready')
+  const [influencerGender, setInfluencerGender] = useState<'female' | 'male'>(ps.influencerGender ?? 'female')
+  const [selectedAvatarId, setSelectedAvatarId] = useState<string | null>(ps.selectedAvatarId ?? null)
+  const [uploadedAvatar, setUploadedAvatar] = useState<string | null>(ps.uploadedAvatar ?? null)
 
   // Painel Cena
-  const [sceneTab, setSceneTab] = useState<'ready' | 'upload' | 'custom'>('ready')
-  const [selectedScenario, setSelectedScenario] = useState<string | null>(null)
-  const [uploadedScene, setUploadedScene] = useState<string | null>(null)
-  const [customScene, setCustomScene] = useState('')
+  const [sceneTab, setSceneTab] = useState<'ready' | 'upload' | 'custom'>(ps.sceneTab ?? 'ready')
+  const [selectedScenario, setSelectedScenario] = useState<string | null>(ps.selectedScenario ?? null)
+  const [uploadedScene, setUploadedScene] = useState<string | null>(ps.uploadedScene ?? null)
+  const [customScene, setCustomScene] = useState(ps.customScene ?? '')
 
   // Painel Ajustes
-  const [pose, setPose] = useState('front')
-  const [style, setStyle] = useState('casual')
-  const [enhancements, setEnhancements] = useState<Set<string>>(new Set(ENHANCEMENTS.filter(e => e.defaultActive).map(e => e.id)))
-  const [format, setFormat] = useState('9:16')
-  const [additionalInfo, setAdditionalInfo] = useState('')
+  const [pose, setPose] = useState(ps.pose ?? 'front')
+  const [style, setStyle] = useState(ps.style ?? 'casual')
+  const [enhancements, setEnhancements] = useState<Set<string>>(
+    new Set(ps.enhancements ?? ENHANCEMENTS.filter(e => e.defaultActive).map(e => e.id))
+  )
+  const [format, setFormat] = useState(ps.format ?? '9:16')
+  const [additionalInfo, setAdditionalInfo] = useState(ps.additionalInfo ?? '')
+
+  // Hidratação dos objetos completos: ID → objeto, faz match após carregar listas
+  const selectedProduct = selectedProductId ? products.find(p => p.id === selectedProductId) ?? null : null
+  const selectedAvatar = selectedAvatarId ? avatars.find(a => a.id === selectedAvatarId) ?? null : null
 
   // Estado consolidado da sessão de geração — persiste em localStorage
   const [session, setSession] = useState<StudioSession>(() => {
@@ -107,7 +147,10 @@ export function StudioPage() {
       if (raw) {
         const parsed = JSON.parse(raw) as StudioSession
         if (parsed.status === 'generating') {
-          return { status: 'idle', resultUrl: null, errorMessage: null }
+          // Mantém 'generating' — recovery effect abaixo procura o resultado no storage
+          const stale = parsed.pendingSince && Date.now() - parsed.pendingSince > GENERATION_TIMEOUT_MS * 2
+          if (stale) return { status: 'idle', resultUrl: null, errorMessage: null }
+          return parsed
         }
         if (parsed.status === 'done') {
           const validUrl = typeof parsed.resultUrl === 'string' && /^https?:\/\//.test(parsed.resultUrl)
@@ -128,6 +171,49 @@ export function StudioPage() {
       localStorage.setItem(STUDIO_SESSION_KEY, JSON.stringify(session))
     } catch { /* quota / private mode */ }
   }, [session])
+
+  // Persist seleções da UI sempre que mudarem
+  useEffect(() => {
+    const sel: StudioSelections = {
+      productTab, selectedProductId, uploadedProduct, selectedVariationIdx,
+      influencerTab, influencerGender, selectedAvatarId, uploadedAvatar,
+      sceneTab, selectedScenario, uploadedScene, customScene,
+      pose, style, enhancements: Array.from(enhancements), format, additionalInfo,
+    }
+    try { localStorage.setItem(STUDIO_SELECTIONS_KEY, JSON.stringify(sel)) } catch { /* ignore */ }
+  }, [productTab, selectedProductId, uploadedProduct, selectedVariationIdx, influencerTab, influencerGender, selectedAvatarId, uploadedAvatar, sceneTab, selectedScenario, uploadedScene, customScene, pose, style, enhancements, format, additionalInfo])
+
+  // Recovery: se entrou em 'generating' (usuário trocou aba/refresh durante geração),
+  // sonda o storage do usuário pra ver se a edge function terminou e salvou o arquivo.
+  useEffect(() => {
+    if (session.status !== 'generating' || !user?.id) return
+    const since = session.pendingSince ?? session.generatedAt ?? Date.now()
+    let cancelled = false
+
+    async function probe() {
+      const { data, error } = await supabase.storage
+        .from('public-media')
+        .list(`studio/${user!.id}`, { limit: 5, sortBy: { column: 'created_at', order: 'desc' } })
+      if (cancelled) return
+      if (error) return // tenta de novo no próximo tick
+      const newest = data?.[0]
+      if (newest?.created_at && new Date(newest.created_at).getTime() > since - 5000) {
+        const { data: pub } = supabase.storage.from('public-media').getPublicUrl(`studio/${user!.id}/${newest.name}`)
+        if (pub?.publicUrl) {
+          setSession({ status: 'done', resultUrl: pub.publicUrl, errorMessage: null, generatedAt: Date.now() })
+          toast.success('Geração recuperada!')
+          return
+        }
+      }
+      if (Date.now() - since > GENERATION_TIMEOUT_MS) {
+        setSession({ status: 'error', resultUrl: null, errorMessage: 'Geração demorou demais. Tente novamente.' })
+        return
+      }
+      if (!cancelled) setTimeout(probe, 3000)
+    }
+    probe()
+    return () => { cancelled = true }
+  }, [session.status, user?.id, session.pendingSince, session.generatedAt])
 
   const credits = subscription?.credits_remaining ?? 0
   const cost = TOOL_CREDITS.studio_image
@@ -164,12 +250,17 @@ export function StudioPage() {
   }, [user?.email])
 
   function fileToDataUrl(onLoad: (v: string) => void) {
-    return (e: React.ChangeEvent<HTMLInputElement>) => {
+    return async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
       if (!file) return
-      const reader = new FileReader()
-      reader.onload = () => onLoad(reader.result as string)
-      reader.readAsDataURL(file)
+      try {
+        const dataUrl = await resizeImageFile(file, 1280, 0.85)
+        onLoad(dataUrl)
+      } catch (err) {
+        toast.error('Falha ao processar imagem: ' + (err as Error).message)
+      } finally {
+        e.target.value = ''
+      }
     }
   }
 
@@ -202,6 +293,7 @@ export function StudioPage() {
       productId: selectedProduct?.id ?? null,
       productImage: productSource,
       productName: selectedProduct?.name ?? 'Upload',
+      pendingSince: Date.now(),
     })
 
     const sceneText = selectedScenario ? SCENARIOS.find(s => s.id === selectedScenario)?.promptHint ?? '' : customScene || ''
@@ -281,7 +373,7 @@ export function StudioPage() {
                     {products.map(p => (
                       <button
                         key={p.id}
-                        onClick={() => { setSelectedProduct(p); setUploadedProduct(null); setSelectedVariationIdx(-1) }}
+                        onClick={() => { setSelectedProductId(p.id); setUploadedProduct(null); setSelectedVariationIdx(-1) }}
                         className={`relative rounded-lg border-2 p-1 transition-all cursor-pointer ${
                           selectedProduct?.id === p.id ? 'border-primary-500' : 'border-transparent hover:border-white/20'
                         }`}
@@ -333,7 +425,7 @@ export function StudioPage() {
                 <label className="flex items-center gap-2 px-4 py-3 rounded-lg border border-dashed border-white/20 hover:border-primary-500 transition-colors cursor-pointer">
                   <Upload size={16} className="text-white/40" />
                   <span className="text-sm text-white/60">{uploadedProduct ? 'Trocar imagem' : 'Escolher arquivo...'}</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={fileToDataUrl(v => { setUploadedProduct(v); setSelectedProduct(null) })} />
+                  <input type="file" accept="image/*" className="hidden" onChange={fileToDataUrl(v => { setUploadedProduct(v); setSelectedProductId(null) })} />
                 </label>
                 {uploadedProduct && <img src={uploadedProduct} alt="Upload" className="mt-2 h-20 rounded-lg object-cover" />}
               </div>
@@ -353,7 +445,7 @@ export function StudioPage() {
                     {currentAvatars.map(a => (
                       <button
                         key={a.id}
-                        onClick={() => { setSelectedAvatar(a); setUploadedAvatar(null) }}
+                        onClick={() => { setSelectedAvatarId(a.id); setUploadedAvatar(null) }}
                         className={`relative rounded-full border-2 overflow-hidden transition-all cursor-pointer bg-surface-400 ${
                           selectedAvatar?.id === a.id ? 'border-primary-500 scale-110' : 'border-transparent hover:border-white/20'
                         }`}
@@ -378,7 +470,7 @@ export function StudioPage() {
                 <label className="flex items-center gap-2 px-4 py-3 rounded-lg border border-dashed border-white/20 hover:border-primary-500 transition-colors cursor-pointer">
                   <Upload size={16} className="text-white/40" />
                   <span className="text-sm text-white/60">{uploadedAvatar ? 'Trocar foto' : `Subir foto ${influencerGender === 'female' ? 'feminina' : 'masculina'}`}</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={fileToDataUrl(v => { setUploadedAvatar(v); setSelectedAvatar(null) })} />
+                  <input type="file" accept="image/*" className="hidden" onChange={fileToDataUrl(v => { setUploadedAvatar(v); setSelectedAvatarId(null) })} />
                 </label>
                 {uploadedAvatar && <img src={uploadedAvatar} alt="Upload" className="mt-2 h-20 rounded-full object-cover" />}
               </div>
