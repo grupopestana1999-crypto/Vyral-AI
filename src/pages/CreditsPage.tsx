@@ -3,6 +3,7 @@ import { useAuthStore } from '../stores/auth-store'
 import { CREDIT_PACKAGES, CUSTOM_PACKAGE_RATE, PLANS } from '../types/credits'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
+import { buildHotmartCheckoutUrl, type HotmartPlan } from '../lib/hotmart'
 import { useState } from 'react'
 
 function fmtCurrency(n: number) { return `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` }
@@ -20,25 +21,40 @@ export function CreditsPage() {
     if (!user) return
     setPurchasing(packageId)
     try {
-      const { data, error } = await supabase.functions.invoke('stripe-checkout', {
-        body: {
-          user_email: user.email,
-          package_name: packageId,
-          credits: _credits,
-          amount_brl: price,
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('sessão expirada')
+
+      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/stripe-checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'apikey': token,
         },
+        body: JSON.stringify({ package_name: packageId, credits: _credits, amount_brl: price }),
       })
-      if (error) throw error
-      if (data?.url) {
-        window.location.href = data.url
-      } else {
-        toast.error('Erro ao criar checkout')
+      const data = await r.json()
+      if (!r.ok || data?.error) {
+        toast.error(data?.error || `Erro ${r.status}`)
+        return
       }
-    } catch {
-      toast.error('Erro ao processar pagamento')
+      if (data?.url) {
+        window.open(data.url, '_blank', 'noopener,noreferrer')
+      } else {
+        toast.error('Checkout não retornou URL válida')
+      }
+    } catch (err) {
+      toast.error('Erro: ' + (err as Error).message)
     } finally {
       setPurchasing(null)
     }
+  }
+
+  function handleUpgradePlan(planKey: string) {
+    if (!(planKey in { starter: 1, creator: 1, pro: 1 })) return
+    const url = buildHotmartCheckoutUrl(planKey as HotmartPlan)
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -134,7 +150,10 @@ export function CreditsPage() {
                 {isCurrent ? (
                   <div className="flex items-center justify-center gap-1 text-primary-400 text-sm"><Check size={14} /> Plano atual</div>
                 ) : (
-                  <button className="w-full py-2 rounded-lg bg-primary-600/20 text-primary-400 text-sm font-medium hover:bg-primary-600/30 transition-colors cursor-pointer">
+                  <button
+                    onClick={() => handleUpgradePlan(key)}
+                    className="w-full py-2 rounded-lg bg-primary-600/20 text-primary-400 text-sm font-medium hover:bg-primary-600/30 transition-colors cursor-pointer"
+                  >
                     Fazer upgrade
                   </button>
                 )}

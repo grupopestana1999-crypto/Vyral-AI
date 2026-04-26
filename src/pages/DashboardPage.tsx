@@ -57,7 +57,7 @@ export function DashboardPage() {
         const result = await Promise.race([
           Promise.all([
             supabase.from('products').select('*').eq('is_active', true).order('revenue', { ascending: false }).limit(3),
-            supabase.from('product_videos').select('*').order('revenue', { ascending: false }).limit(3),
+            supabase.from('product_videos').select('*, products(image_url)').order('revenue', { ascending: false }).limit(3),
             supabase.from('creators').select('*').eq('is_active', true).order('projected_monthly_sales', { ascending: false }).limit(3),
           ]),
           new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000)),
@@ -163,11 +163,13 @@ export function DashboardPage() {
               [1, 2, 3].map(i => <div key={i} className="h-16 bg-surface-300 rounded-lg animate-pulse" />)
             ) : videos.length === 0 ? (
               <p className="text-sm text-white/30 py-4 text-center">Nenhum vídeo encontrado</p>
-            ) : videos.map((v, i) => (
+            ) : videos.map((v, i) => {
+              const thumb = v.thumbnail_url || (v as ProductVideo & { products?: { image_url?: string } }).products?.image_url
+              return (
               <div key={v.id} className="flex items-center gap-3 bg-surface-300 border border-white/5 rounded-lg p-3 hover:border-primary-500/30 transition-colors">
                 <MedalBadge rank={i + 1} />
-                {v.thumbnail_url ? (
-                  <img src={v.thumbnail_url} alt={v.title ?? ''} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" loading="lazy" />
+                {thumb ? (
+                  <img src={thumb} alt={v.title ?? ''} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" loading="lazy" />
                 ) : (
                   <div className="w-10 h-10 rounded-lg bg-surface-400 flex items-center justify-center flex-shrink-0"><Video size={16} className="text-white/20" /></div>
                 )}
@@ -179,7 +181,8 @@ export function DashboardPage() {
                   </div>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
