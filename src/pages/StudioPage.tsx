@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Sparkles, Upload, ChevronDown, ChevronUp, Image, Loader2, Coins, Flame, Package, User, Camera, SlidersHorizontal } from 'lucide-react'
+import { Sparkles, Upload, ChevronDown, ChevronUp, Image, Loader2, Coins, Flame, Package, User, Camera, SlidersHorizontal, RotateCcw } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/auth-store'
 import { TOOL_CREDITS } from '../types/credits'
@@ -53,21 +53,22 @@ function loadSelections(): StudioSelections {
   } catch { return {} }
 }
 
-function Panel({ title, subtitle, icon, children, defaultOpen = false }: {
+function Panel({ title, subtitle, icon, children, defaultOpen = false, complete = false }: {
   title: string
   subtitle?: string
   icon: React.ReactNode
   children: React.ReactNode
   defaultOpen?: boolean
+  complete?: boolean
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="bg-surface-300 border border-white/5 rounded-xl overflow-hidden">
+    <div className={`bg-surface-300 border rounded-xl overflow-hidden transition-colors ${complete ? 'border-emerald-500/30' : 'border-white/5'}`}>
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center gap-3 p-4 hover:bg-white/5 transition-colors cursor-pointer"
       >
-        <div className="w-8 h-8 rounded-lg bg-primary-600/20 flex items-center justify-center text-primary-400">
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${complete ? 'bg-emerald-500/20 text-emerald-400' : 'bg-primary-600/20 text-primary-400'}`}>
           {icon}
         </div>
         <div className="text-left flex-1">
@@ -343,6 +344,38 @@ export function StudioPage() {
     void handleGenerate()
   }
 
+  function resetAll() {
+    setProductTab('viral')
+    setSelectedProductId(null)
+    setUploadedProduct(null)
+    setSelectedVariationIdx(-1)
+    setInfluencerTab('ready')
+    setInfluencerGender('female')
+    setSelectedAvatarId(null)
+    setUploadedAvatar(null)
+    setSceneTab('ready')
+    setSelectedScenario(null)
+    setUploadedScene(null)
+    setCustomScene('')
+    setPose('front')
+    setStyle('casual')
+    setEnhancements(new Set(ENHANCEMENTS.filter(e => e.defaultActive).map(e => e.id)))
+    setFormat('9:16')
+    setAdditionalInfo('')
+    setSession({ status: 'idle', resultUrl: null, errorMessage: null })
+    try {
+      localStorage.removeItem(STUDIO_SELECTIONS_KEY)
+      localStorage.removeItem(STUDIO_SESSION_KEY)
+    } catch { /* ignore */ }
+    toast.success('Tudo zerado')
+  }
+
+  // Habilita o botão Gerar só quando produto + influencer + cena estão definidos
+  const hasProduct = !!(selectedProduct || uploadedProduct)
+  const hasInfluencer = !!(selectedAvatar || uploadedAvatar)
+  const hasScene = !!(selectedScenario || uploadedScene || customScene.trim())
+  const canGenerate = hasProduct && hasInfluencer && hasScene && credits >= cost && !generating
+
   const femaleAvatars = avatars.filter(a => a.gender === 'female')
   const maleAvatars = avatars.filter(a => a.gender === 'male')
   const currentAvatars = influencerGender === 'female' ? femaleAvatars : maleAvatars
@@ -359,10 +392,10 @@ export function StudioPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
         <div className="space-y-3">
           {/* PAINEL PRODUTO */}
-          <Panel title="Produto" subtitle={selectedProduct?.name ?? (uploadedProduct ? 'Upload feito' : 'Escolha um produto')} icon={<Package size={16} />} defaultOpen>
+          <Panel title="Produto" subtitle={selectedProduct?.name ?? (uploadedProduct ? 'Upload feito' : 'Escolha um produto')} icon={<Package size={16} />} defaultOpen complete={hasProduct}>
             <Tabs tabs={[{ id: 'viral', label: 'Produtos Virais' }, { id: 'upload', label: 'Upload' }]} active={productTab} onChange={(id) => setProductTab(id as 'viral' | 'upload')} />
             {productTab === 'viral' ? (
               <>
@@ -433,7 +466,7 @@ export function StudioPage() {
           </Panel>
 
           {/* PAINEL INFLUENCER */}
-          <Panel title="Influencer" subtitle={selectedAvatar?.name ?? (uploadedAvatar ? 'Upload feito' : 'Escolha um avatar')} icon={<User size={16} />}>
+          <Panel title="Influencer" subtitle={selectedAvatar?.name ?? (uploadedAvatar ? 'Upload feito' : 'Escolha um avatar')} icon={<User size={16} />} complete={hasInfluencer}>
             <Tabs tabs={[{ id: 'ready', label: 'Prontos' }, { id: 'upload', label: 'Upload' }]} active={influencerTab} onChange={(id) => setInfluencerTab(id as 'ready' | 'upload')} />
             {influencerTab === 'ready' ? (
               <>
@@ -478,7 +511,7 @@ export function StudioPage() {
           </Panel>
 
           {/* PAINEL CENA */}
-          <Panel title="Cena" subtitle={selectedScenario ? SCENARIOS.find(s => s.id === selectedScenario)?.name : (customScene ? 'Personalizada' : 'Escolha uma cena')} icon={<Camera size={16} />}>
+          <Panel title="Cena" subtitle={selectedScenario ? SCENARIOS.find(s => s.id === selectedScenario)?.name : (customScene ? 'Personalizada' : 'Escolha uma cena')} icon={<Camera size={16} />} complete={hasScene}>
             <Tabs tabs={[{ id: 'ready', label: 'Prontas' }, { id: 'upload', label: 'Upload' }, { id: 'custom', label: 'Personalizada' }]} active={sceneTab} onChange={(id) => setSceneTab(id as 'ready' | 'upload' | 'custom')} />
             {sceneTab === 'ready' ? (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -596,10 +629,48 @@ export function StudioPage() {
               </div>
             </div>
           </Panel>
+
+          {/* RODAPÉ ESQUERDA: Hoje + Custo + Gerar Imagem + Reiniciar */}
+          <div className="bg-surface-300 border border-white/5 rounded-xl p-4 space-y-3 mt-3">
+            <div className="flex items-center justify-between text-sm text-white/50">
+              <div className="flex items-center gap-1.5">
+                <Image size={14} />
+                <span>Hoje: <span className="text-white font-semibold">{todayCount}</span></span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Coins size={14} className="text-neon" />
+                <span className="text-neon font-semibold">{cost} créditos</span>
+              </div>
+            </div>
+
+            {!canGenerate && !generating && (
+              <p className="text-[11px] text-white/40 text-center">
+                {!hasProduct && '· Selecione um produto'}
+                {!hasInfluencer && ' · Selecione um influencer'}
+                {!hasScene && ' · Escolha uma cena'}
+                {credits < cost && ' · Créditos insuficientes'}
+              </p>
+            )}
+
+            <button
+              onClick={handleGenerate}
+              disabled={!canGenerate}
+              className="w-full py-3.5 rounded-xl bg-neon text-surface-500 font-bold text-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {generating ? <Loader2 size={18} className="animate-spin" /> : <><Sparkles size={18} />Gerar Imagem</>}
+            </button>
+
+            <button
+              onClick={resetAll}
+              className="w-full py-2.5 rounded-xl bg-surface-400 border border-white/10 text-white/70 hover:text-white hover:bg-surface-500 text-sm font-medium transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <RotateCcw size={14} /> Reiniciar
+            </button>
+          </div>
         </div>
 
-        {/* PREVIEW + GERAR */}
-        <div className="space-y-4">
+        {/* COLUNA DIREITA: PREVIEW + (quando done) PROMPT GENERATOR VEO */}
+        <div className="space-y-4 lg:sticky lg:top-4">
           <GenerationPreview
             status={session.status}
             resultUrl={session.resultUrl}
@@ -614,25 +685,6 @@ export function StudioPage() {
               resultImage={session.resultUrl}
             />
           )}
-
-          <div className="flex items-center justify-between text-sm text-white/50">
-            <div className="flex items-center gap-1">
-              <Image size={14} />
-              <span>Hoje: <span className="text-white font-semibold">{todayCount}</span></span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Coins size={14} className="text-neon" />
-              <span className="text-neon font-semibold">{cost} créditos</span>
-            </div>
-          </div>
-
-          <button
-            onClick={handleGenerate}
-            disabled={generating || credits < cost}
-            className="w-full py-3.5 rounded-xl bg-neon text-surface-500 font-bold text-sm hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
-          >
-            {generating ? <Loader2 size={18} className="animate-spin" /> : <><Sparkles size={18} />Gerar Imagem</>}
-          </button>
         </div>
       </div>
     </div>
