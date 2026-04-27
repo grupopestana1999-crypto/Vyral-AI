@@ -41,10 +41,15 @@ export const FREE_DAILY_PROMPTS = 20
 export const PROMPT_OVERAGE_CREDITS = 1
 export const STUDIO_DAILY_LIMIT = 20
 
+// PLANS deriva de HOTMART_OFFERS pra ter UMA única fonte da verdade.
+// Antes havia divergência: PLANS dizia 600 créditos no Starter mas o webhook Hotmart
+// entregava 300. Agora ambos usam o mesmo valor — o que está cadastrado no Hotmart.
+import { HOTMART_OFFERS } from '../lib/hotmart'
+
 export const PLANS = {
-  starter: { name: 'Starter', price: 147, credits: 600 },
-  creator: { name: 'Creator', price: 197, credits: 900 },
-  pro: { name: 'Pro', price: 297, credits: 1500 },
+  starter: { name: 'Starter', price: HOTMART_OFFERS.starter.price, credits: HOTMART_OFFERS.starter.credits },
+  creator: { name: 'Creator', price: HOTMART_OFFERS.creator.price, credits: HOTMART_OFFERS.creator.credits },
+  pro: { name: 'Pro', price: HOTMART_OFFERS.pro.price, credits: HOTMART_OFFERS.pro.credits },
 } as const
 
 export const CREDIT_PACKAGES = [
