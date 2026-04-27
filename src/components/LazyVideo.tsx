@@ -31,6 +31,13 @@ export function LazyVideo({ src, className = '', poster, fallbackIcon, fallbackI
     return () => io.disconnect()
   }, [])
 
+  // Se a URL aponta pra imagem estática (PNG/JPG/etc), renderiza como <img> direto
+  // ao invés de tentar como vídeo (que daria onError + fallback gradient feio)
+  const isImage = !!src && /\.(png|jpe?g|webp|gif|avif)(\?|#|$)/i.test(src)
+  if (isImage && !err) {
+    return <img src={src} className={`${className} object-cover`} alt="" loading="lazy" onError={() => setErr(true)} />
+  }
+
   if (err || !src) {
     if (fallbackImage) {
       return <img src={fallbackImage} className={className} alt="" />
