@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { POSES, STYLES, FORMATS, ENHANCEMENTS, SCENARIOS } from '../../types/studio'
 import type { Product, Avatar } from '../../types/database'
 import { resizeImageFile } from '../../lib/imageUtils'
+import { applyCreditsFromResponse } from '../../lib/applyCreditsResponse'
 
 interface LabNodeContext {
   onOpenEditor?: (nodeId: string) => void
@@ -383,7 +384,10 @@ export function PromptNode({ id, data, selected }: NodeProps) {
         body: JSON.stringify({ description: val, type: 'video' }),
       })
       const data = await r.json()
-      if (data?.prompt) { setVal(data.prompt.slice(0, 800)); save(data.prompt.slice(0, 800)) }
+      if (data?.prompt) {
+        applyCreditsFromResponse(data)
+        setVal(data.prompt.slice(0, 800)); save(data.prompt.slice(0, 800))
+      }
     } finally { setEnhancing(false) }
   }
 

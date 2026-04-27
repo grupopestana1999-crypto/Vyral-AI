@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { User, Session } from '@supabase/supabase-js'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { UserRole, Subscription } from '../types/database'
 
@@ -14,7 +15,10 @@ interface AuthState {
   signUp: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: string | null }>
+  setCreditsRemaining: (n: number) => void
 }
+
+let subscriptionChannel: RealtimeChannel | null = null
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
@@ -30,6 +34,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const role = await fetchUserRole(session.user.id)
       const subscription = await fetchSubscription(session.user.email!)
       set({ user: session.user, session, role, subscription, isLoading: false })
+      subscribeToSubscriptionChanges(session.user.email!, set)
     } else {
       set({ isLoading: false })
     }
@@ -39,7 +44,9 @@ export const useAuthStore = create<AuthState>((set) => ({
         const role = await fetchUserRole(session.user.id)
         const subscription = await fetchSubscription(session.user.email!)
         set({ user: session.user, session, role, subscription })
+        subscribeToSubscriptionChanges(session.user.email!, set)
       } else {
+        unsubscribeFromSubscriptionChanges()
         set({ user: null, session: null, role: 'user', subscription: null })
       }
     })
@@ -58,6 +65,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signOut: async () => {
+    unsubscribeFromSubscriptionChanges()
     await supabase.auth.signOut()
     set({ user: null, session: null, role: 'user', subscription: null })
   },
@@ -67,6 +75,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (error) return { error: error.message }
     return { error: null }
   },
+
+  setCreditsRemaining: (n: number) => set(state => ({
+    subscription: state.subscription ? { ...state.subscription, credits_remaining: n } : null
+  })),
 }))
 
 async function fetchUserRole(userId: string): Promise<UserRole> {
@@ -90,4 +102,29 @@ async function fetchSubscription(email: string): Promise<Subscription | null> {
     .limit(1)
     .maybeSingle()
   return data
+}
+
+function subscribeToSubscriptionChanges(email: string, set: (partial: Partial<AuthState>) => void) {
+  unsubscribeFromSubscriptionChanges()
+  const normalized = email.toLowerCase()
+  subscriptionChannel = supabase
+    .channel(`subscription-${normalized}`)
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'subscriptions', filter: `customer_email=eq.${normalized}` },
+      (payload) => {
+        const next = payload.new as Subscription
+        if (next && (next.status === 'active' || next.status === 'approved')) {
+          set({ subscription: next })
+        }
+      }
+    )
+    .subscribe()
+}
+
+function unsubscribeFromSubscriptionChanges() {
+  if (subscriptionChannel) {
+    supabase.removeChannel(subscriptionChannel)
+    subscriptionChannel = null
+  }
 }

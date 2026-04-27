@@ -33,7 +33,7 @@ export function AdminBoosters() {
               <Zap size={16} className={isDisabled ? 'text-white/20' : 'text-primary-400'} />
               <div>
                 <p className={`text-sm font-medium ${isDisabled ? 'text-white/30 line-through' : 'text-white'}`}>{label}</p>
-                <p className="text-[10px] text-white/30">{credits === 0 ? 'FREE (5/dia)' : `${credits} créditos`}</p>
+                <p className="text-[10px] text-white/30">{credits === 0 ? 'FREE (10 lifetime)' : `${credits} créditos`}</p>
               </div>
             </div>
             <button onClick={() => toggle(id)} className="cursor-pointer">

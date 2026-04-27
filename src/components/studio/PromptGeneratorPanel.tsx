@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
+import { applyCreditsFromResponse } from '../../lib/applyCreditsResponse'
 
 interface Props {
   productName?: string | null
@@ -59,7 +60,7 @@ export function PromptGeneratorPanel({ productName, productImage, resultImage }:
   const [customMove, setCustomMove] = useState('')
   const [dialogue, setDialogue] = useState('')
   const [result, setResult] = useState<string | null>(null)
-  const [usesToday, setUsesToday] = useState<{ used: number; limit: number } | null>(null)
+  const [usesLifetime, setUsesLifetime] = useState<{ used: number; limit: number } | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -87,9 +88,12 @@ export function PromptGeneratorPanel({ productName, productImage, resultImage }:
       if (error) throw new Error(error.message)
       if (data?.error) throw new Error(data.error)
       if (data?.prompt) {
+        applyCreditsFromResponse(data)
         setResult(data.prompt)
-        if (typeof data.uses_today === 'number' && typeof data.limit === 'number') {
-          setUsesToday({ used: data.uses_today, limit: data.limit })
+        const used = typeof data.uses_lifetime === 'number' ? data.uses_lifetime : data.uses_today
+        const limit = typeof data.lifetime_limit === 'number' ? data.lifetime_limit : data.limit
+        if (typeof used === 'number' && typeof limit === 'number') {
+          setUsesLifetime({ used, limit })
         }
       } else {
         throw new Error('Resposta inesperada')
@@ -235,7 +239,7 @@ export function PromptGeneratorPanel({ productName, productImage, resultImage }:
             {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
             {loading
               ? 'Gerando...'
-              : `Gerar Prompt${usesToday ? ` (${usesToday.used}/${usesToday.limit})` : ''}`}
+              : `Gerar Prompt${usesLifetime ? ` (${usesLifetime.used}/${usesLifetime.limit} grátis · vida toda)` : ''}`}
           </button>
 
           {result && (

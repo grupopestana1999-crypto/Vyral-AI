@@ -5,6 +5,7 @@ import { BOOSTER_BY_SLUG, type BoosterInput } from '../types/boosters'
 import { useAuthStore } from '../stores/auth-store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
+import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 
 function BoosterVideo({ url }: { url: string }) {
   const ref = useRef<HTMLVideoElement>(null)
@@ -148,6 +149,8 @@ export function BoosterDetailPage() {
         setError(data.error + (data.details ? ` (${data.details})` : ''))
         return
       }
+
+      applyCreditsFromResponse(data)
 
       if (booster.resultType === 'text' && data?.prompt) {
         setResult({ type: 'text', data: data.prompt })
