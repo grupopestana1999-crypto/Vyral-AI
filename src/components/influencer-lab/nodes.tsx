@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { Package, User, Image as ImageIcon, Sliders, Sparkles, Loader2, CheckCircle2 } from 'lucide-react'
+import { Package, User, Image as ImageIcon, Sliders, Sparkles, Loader2, CheckCircle2, Upload, Wand2, Pencil, Film, Activity, MessageSquare } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { POSES, STYLES, FORMATS, ENHANCEMENTS, SCENARIOS } from '../../types/studio'
 import type { Product, Avatar } from '../../types/database'
+import { resizeImageFile } from '../../lib/imageUtils'
 
 interface LabNodeContext {
   onOpenEditor?: (nodeId: string) => void
@@ -321,12 +322,208 @@ export function GenerateNode({ data, selected }: NodeProps) {
   )
 }
 
-export const NODE_LIBRARY: { type: string; label: string; icon: typeof Package; color: string; defaults: Record<string, unknown> }[] = [
-  { type: 'product', label: 'Produto', icon: Package, color: 'text-orange-400', defaults: {} },
-  { type: 'avatar', label: 'Influencer', icon: User, color: 'text-pink-400', defaults: {} },
-  { type: 'scene', label: 'Cena', icon: ImageIcon, color: 'text-emerald-400', defaults: {} },
-  { type: 'settings', label: 'Ajustes', icon: Sliders, color: 'text-sky-400', defaults: { pose: 'front', style: 'casual', enhancements: ['skin', 'sharpness', 'anti_ai', 'hands'], format: '9:16' } },
-  { type: 'generate', label: 'Executar', icon: Sparkles, color: 'text-violet-400', defaults: { status: 'idle' } },
+// Input node: upload livre de imagem (não atrelado a produto/avatar)
+export function ImageNode({ id, data, selected }: NodeProps) {
+  const d = data as { imageUrl?: string }
+  const [busy, setBusy] = useState(false)
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    setBusy(true)
+    try {
+      const url = await resizeImageFile(file, 1280, 0.85)
+      window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { imageUrl: url } } }))
+    } finally { setBusy(false); e.target.value = '' }
+  }
+
+  return (
+    <div className={`${baseNodeClass} ${selected ? 'ring-2 ring-primary-500' : ''}`}>
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
+        <ImageIcon size={14} className="text-cyan-400" />
+        <span className="text-xs font-semibold text-white">Imagem</span>
+      </div>
+      <div className="p-3">
+        {d.imageUrl ? (
+          <label className="block cursor-pointer">
+            <img src={d.imageUrl} alt="" className="w-full rounded object-cover" />
+            <p className="text-[9px] text-primary-400 mt-1 text-center">Trocar imagem</p>
+            <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+          </label>
+        ) : (
+          <label className="w-full flex flex-col items-center gap-1.5 py-4 rounded-lg border border-dashed border-white/20 hover:border-primary-500/50 cursor-pointer">
+            {busy ? <Loader2 size={16} className="text-primary-400 animate-spin" /> : <Upload size={16} className="text-cyan-400" />}
+            <span className="text-[10px] text-white/60">{busy ? 'Subindo…' : 'Subir imagem'}</span>
+            <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+          </label>
+        )}
+      </div>
+      <Handle type="source" position={Position.Right} className="!bg-cyan-400 !w-2 !h-2" />
+    </div>
+  )
+}
+
+// Input node: prompt livre + botão melhorar
+export function PromptNode({ id, data, selected }: NodeProps) {
+  const d = data as { prompt?: string }
+  const [enhancing, setEnhancing] = useState(false)
+  const [val, setVal] = useState(d.prompt || '')
+
+  function save(v: string) {
+    window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { prompt: v } } }))
+  }
+
+  async function enhance() {
+    if (!val.trim()) return
+    setEnhancing(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token; if (!token) return
+      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/enhance-prompt', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
+        body: JSON.stringify({ description: val, type: 'video' }),
+      })
+      const data = await r.json()
+      if (data?.prompt) { setVal(data.prompt.slice(0, 800)); save(data.prompt.slice(0, 800)) }
+    } finally { setEnhancing(false) }
+  }
+
+  return (
+    <div className={`${baseNodeClass} ${selected ? 'ring-2 ring-primary-500' : ''}`}>
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
+        <MessageSquare size={14} className="text-amber-400" />
+        <span className="text-xs font-semibold text-white">Prompt</span>
+      </div>
+      <div className="p-3 space-y-2">
+        <textarea
+          value={val}
+          onChange={e => setVal(e.target.value.slice(0, 800))}
+          onBlur={() => save(val)}
+          placeholder="Descreva o que você quer…"
+          rows={4}
+          className="nodrag w-full p-2 bg-surface-400 border border-white/10 rounded text-[11px] text-white placeholder:text-white/30 resize-none focus:outline-none focus:border-primary-500"
+        />
+        <button
+          onClick={enhance}
+          disabled={enhancing || !val.trim()}
+          className="w-full flex items-center justify-center gap-1 py-1 rounded bg-neon text-surface-500 text-[10px] font-bold hover:brightness-110 disabled:opacity-40 cursor-pointer"
+        >
+          {enhancing ? <Loader2 size={10} className="animate-spin" /> : <Wand2 size={10} />}
+          Melhorar
+        </button>
+      </div>
+      <Handle type="source" position={Position.Right} className="!bg-amber-400 !w-2 !h-2" />
+    </div>
+  )
+}
+
+// Helper genérico pra nodes de ação (Edit / Video / Motion)
+function ActionNodeShell({ icon: Icon, color, label, data, children, statusBg }: {
+  icon: typeof Package; color: string; label: string;
+  data: { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean; readyHint?: string; mediaType?: 'image' | 'video' };
+  children?: React.ReactNode; statusBg: string;
+}) {
+  const status = data.status || 'idle'
+  return (
+    <div className={`${baseNodeClass} ${statusBg}`}>
+      <Handle type="target" position={Position.Left} className={`!w-2 !h-2 ${color}`} />
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
+        <Icon size={14} className={color.replace('!bg-', 'text-')} />
+        <span className="text-xs font-semibold text-white">{label}</span>
+      </div>
+      <div className="p-3 space-y-2">
+        {children}
+        <button
+          onClick={() => data.onExecute?.()}
+          disabled={status === 'generating' || !data.ready}
+          className="w-full py-2 rounded-lg bg-neon text-surface-500 text-[11px] font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1"
+        >
+          {status === 'generating' ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+          {status === 'generating' ? 'Gerando…' : status === 'done' ? 'Gerar de novo' : 'Executar'}
+        </button>
+        {!data.ready && status !== 'done' && <p className="text-[9px] text-yellow-400/80 text-center">{data.readyHint || 'Conecte os inputs'}</p>}
+        {status === 'done' && data.resultUrl && (
+          data.mediaType === 'video'
+            ? <video src={data.resultUrl} className="w-full rounded" controls preload="metadata" />
+            : <img src={data.resultUrl} alt="" className="w-full rounded" />
+        )}
+        {status === 'done' && !data.resultUrl && <p className="text-[9px] text-amber-400 text-center">Em processamento — veja Histórico</p>}
+        {status === 'error' && <p className="text-[9px] text-red-400 text-center">{data.errorMessage || 'Erro'}</p>}
+      </div>
+    </div>
+  )
+}
+
+// Action: Editar Imagem (input Image+Prompt → edit-image-inpaint, 1 cr)
+export function EditImageActionNode({ data, selected }: NodeProps) {
+  const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean }
+  return (
+    <ActionNodeShell
+      icon={Pencil} color="!bg-fuchsia-400" label="Editar Imagem"
+      data={{ ...d, mediaType: 'image', readyHint: 'Conecte Imagem + Prompt' }}
+      statusBg={selected ? 'ring-2 ring-primary-500' : ''}
+    >
+      <p className="text-[9px] text-white/40 text-center">1 crédito · nano-banana</p>
+    </ActionNodeShell>
+  )
+}
+
+// Action: Gerar Vídeo (input Image+Prompt → veo-lite/fast OU grok)
+export function GenerateVideoActionNode({ id, data, selected }: NodeProps) {
+  const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean; mode?: 'veo-lite' | 'veo-fast' | 'grok' }
+  const mode = d.mode || 'veo-lite'
+  function setMode(m: typeof mode) {
+    window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { ...d, mode: m } } }))
+  }
+  const credits = mode === 'veo-fast' ? 8 : 5
+  const label = mode === 'veo-fast' ? 'Veo 3.1 Fast' : mode === 'grok' ? 'Grok IA' : 'Veo 3.1 Lite'
+
+  return (
+    <ActionNodeShell
+      icon={Film} color="!bg-blue-400" label="Gerar Vídeo"
+      data={{ ...d, mediaType: 'video', readyHint: 'Conecte Imagem + Prompt' }}
+      statusBg={selected ? 'ring-2 ring-primary-500' : ''}
+    >
+      <div className="grid grid-cols-3 gap-1">
+        {(['veo-lite', 'veo-fast', 'grok'] as const).map(m => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            className={`py-1 rounded text-[9px] font-medium cursor-pointer ${mode === m ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/60 hover:text-white'}`}
+          >{m === 'veo-lite' ? 'Lite' : m === 'veo-fast' ? 'Fast' : 'Grok'}</button>
+        ))}
+      </div>
+      <p className="text-[9px] text-white/40 text-center">{label} · {credits} créditos</p>
+    </ActionNodeShell>
+  )
+}
+
+// Action: Controle de Movimento (input Image+Prompt → Kling 3.0)
+export function MotionActionNode({ data, selected }: NodeProps) {
+  const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean }
+  return (
+    <ActionNodeShell
+      icon={Activity} color="!bg-rose-400" label="Controle de Movimento"
+      data={{ ...d, mediaType: 'video', readyHint: 'Conecte Imagem + Prompt' }}
+      statusBg={selected ? 'ring-2 ring-primary-500' : ''}
+    >
+      <p className="text-[9px] text-white/40 text-center">30 créditos · Kling 3.0</p>
+    </ActionNodeShell>
+  )
+}
+
+export const NODE_LIBRARY: { type: string; label: string; icon: typeof Package; color: string; defaults: Record<string, unknown>; group: 'input' | 'action' }[] = [
+  // Inputs
+  { type: 'product', label: 'Produto', icon: Package, color: 'text-orange-400', defaults: {}, group: 'input' },
+  { type: 'avatar', label: 'Influencer', icon: User, color: 'text-pink-400', defaults: {}, group: 'input' },
+  { type: 'scene', label: 'Cena', icon: ImageIcon, color: 'text-emerald-400', defaults: {}, group: 'input' },
+  { type: 'settings', label: 'Ajustes', icon: Sliders, color: 'text-sky-400', defaults: { pose: 'front', style: 'casual', enhancements: ['skin', 'sharpness', 'anti_ai', 'hands'], format: '9:16' }, group: 'input' },
+  { type: 'image', label: 'Imagem', icon: ImageIcon, color: 'text-cyan-400', defaults: {}, group: 'input' },
+  { type: 'prompt', label: 'Prompt', icon: MessageSquare, color: 'text-amber-400', defaults: { prompt: '' }, group: 'input' },
+  // Actions
+  { type: 'generate', label: 'Gerar Imagem UGC', icon: Sparkles, color: 'text-violet-400', defaults: { status: 'idle' }, group: 'action' },
+  { type: 'edit-image', label: 'Editar Imagem', icon: Pencil, color: 'text-fuchsia-400', defaults: { status: 'idle' }, group: 'action' },
+  { type: 'video', label: 'Gerar Vídeo', icon: Film, color: 'text-blue-400', defaults: { status: 'idle', mode: 'veo-lite' }, group: 'action' },
+  { type: 'motion', label: 'Controle Movimento', icon: Activity, color: 'text-rose-400', defaults: { status: 'idle' }, group: 'action' },
 ]
 
 export { type LabNodeContext }

@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuthStore } from '../stores/auth-store'
 import { supabase } from '../lib/supabase'
-import { ProductNode, AvatarNode, SceneNode, SettingsNode, GenerateNode, NODE_LIBRARY } from '../components/influencer-lab/nodes'
+import { ProductNode, AvatarNode, SceneNode, SettingsNode, GenerateNode, ImageNode, PromptNode, EditImageActionNode, GenerateVideoActionNode, MotionActionNode, NODE_LIBRARY } from '../components/influencer-lab/nodes'
 import { POSES, STYLES, FORMATS, ENHANCEMENTS, SCENARIOS } from '../types/studio'
 
 const nodeTypes = {
@@ -28,7 +28,14 @@ const nodeTypes = {
   scene: SceneNode,
   settings: SettingsNode,
   generate: GenerateNode,
+  image: ImageNode,
+  prompt: PromptNode,
+  'edit-image': EditImageActionNode,
+  video: GenerateVideoActionNode,
+  motion: MotionActionNode,
 }
+
+const ACTION_NODE_TYPES = new Set(['generate', 'edit-image', 'video', 'motion'])
 
 function InfluencerLabInner() {
   const navigate = useNavigate()
@@ -82,111 +89,137 @@ function InfluencerLabInner() {
     event.dataTransfer.effectAllowed = 'move'
   }
 
-  // Resolver o workflow: pegar nó Generate, verificar se tem product/avatar/scene/settings conectados
-  function resolveWorkflow() {
-    const genNode = nodes.find(n => n.type === 'generate')
-    if (!genNode) return null
-
-    const inEdges = edges.filter(e => e.target === genNode.id)
-    const connectedNodes = inEdges.map(e => nodes.find(n => n.id === e.source)).filter(Boolean) as Node[]
-
-    const product = connectedNodes.find(n => n.type === 'product')
-    const avatar = connectedNodes.find(n => n.type === 'avatar')
-    const scene = connectedNodes.find(n => n.type === 'scene')
-    const settings = connectedNodes.find(n => n.type === 'settings')
-
-    // Seguir a cadeia ancestral: generate pode ter só settings, settings tem scene, scene tem avatar, avatar tem product.
-    // Pra simplificar MVP: faz BFS reverso a partir do generate pra coletar todos os ancestrais.
+  // Coleta ancestrais (BFS reverso) de um node específico
+  function ancestorsOf(nodeId: string): Node[] {
     const visited = new Set<string>()
-    const queue = [genNode.id]
+    const queue = [nodeId]
     while (queue.length > 0) {
       const current = queue.shift()!
       if (visited.has(current)) continue
       visited.add(current)
       edges.filter(e => e.target === current).forEach(e => queue.push(e.source))
     }
-    const ancestors = Array.from(visited).map(id => nodes.find(n => n.id === id)).filter(Boolean) as Node[]
-
-    const ancestorProduct = product || ancestors.find(n => n.type === 'product')
-    const ancestorAvatar = avatar || ancestors.find(n => n.type === 'avatar')
-    const ancestorScene = scene || ancestors.find(n => n.type === 'scene')
-    const ancestorSettings = settings || ancestors.find(n => n.type === 'settings')
-
-    return {
-      product: ancestorProduct,
-      avatar: ancestorAvatar,
-      scene: ancestorScene,
-      settings: ancestorSettings,
-      generateNodeId: genNode.id,
-    }
+    visited.delete(nodeId)
+    return Array.from(visited).map(id => nodes.find(n => n.id === id)).filter(Boolean) as Node[]
   }
 
-  const resolved = resolveWorkflow()
-  const ready = !!(resolved?.product && resolved?.avatar && resolved?.scene && resolved?.settings
-    && (resolved.product.data as { productId?: string }).productId
-    && (resolved.avatar.data as { avatarId?: string }).avatarId
-    && ((resolved.scene.data as { scenarioId?: string; customPrompt?: string }).scenarioId || (resolved.scene.data as { customPrompt?: string }).customPrompt))
-
-  async function executeWorkflow() {
-    if (!resolved) return
-    if (!ready) {
-      toast.error('Conecte todos os nodes: Produto + Avatar + Cena + Ajustes ao nó Executar')
-      return
+  // Determina readiness pra cada tipo de action
+  function isActionReady(node: Node): { ready: boolean; hint?: string } {
+    const a = ancestorsOf(node.id)
+    if (node.type === 'generate') {
+      const product = a.find(n => n.type === 'product')
+      const avatar = a.find(n => n.type === 'avatar')
+      const scene = a.find(n => n.type === 'scene')
+      const settings = a.find(n => n.type === 'settings')
+      const ok = product && avatar && scene && settings
+        && (product.data as { productId?: string }).productId
+        && (avatar.data as { avatarId?: string }).avatarId
+        && ((scene.data as { scenarioId?: string; customPrompt?: string }).scenarioId || (scene.data as { customPrompt?: string }).customPrompt)
+      return { ready: !!ok, hint: 'Conecte Produto + Influencer + Cena + Ajustes' }
     }
+    if (node.type === 'edit-image' || node.type === 'video' || node.type === 'motion') {
+      const image = a.find(n => n.type === 'image' || n.type === 'product' || n.type === 'avatar')
+      const promptN = a.find(n => n.type === 'prompt')
+      const hasImage = image && (image.data as { imageUrl?: string; productId?: string; avatarId?: string }).imageUrl
+      const hasPrompt = promptN && ((promptN.data as { prompt?: string }).prompt || '').trim().length > 0
+      return { ready: !!(hasImage && hasPrompt), hint: 'Conecte Imagem + Prompt' }
+    }
+    return { ready: false }
+  }
 
-    // Atualiza node Generate pra status = generating
-    setNodes(nds => nds.map(n => n.id === resolved.generateNodeId ? { ...n, data: { ...n.data, status: 'generating' } } : n))
+  async function executeAction(node: Node) {
+    const a = ancestorsOf(node.id)
+    setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'generating', errorMessage: undefined } } : n))
 
     try {
-      const pd = resolved.product!.data as { productId?: string; productName?: string; imageUrl?: string }
-      const ad = resolved.avatar!.data as { avatarId?: string; imageUrl?: string; gender?: string }
-      const sd = resolved.scene!.data as { scenarioId?: string; scenarioName?: string; customPrompt?: string }
-      const td = resolved.settings!.data as { pose: string; style: string; enhancements: string[]; format: string; additionalInfo?: string }
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('sessão expirada')
 
-      const sceneHint = sd.scenarioId
-        ? SCENARIOS.find(s => s.id === sd.scenarioId)?.promptHint || sd.scenarioName
-        : sd.customPrompt
+      let endpoint = ''
+      let payload: Record<string, unknown> = {}
 
-      const poseName = POSES.find(p => p.id === td.pose)?.name || td.pose
-      const styleName = STYLES.find(s => s.id === td.style)?.name || td.style
-      const enhancementsNames = td.enhancements.map(e => ENHANCEMENTS.find(x => x.id === e)?.name).filter(Boolean).join(', ')
-      const formatId = FORMATS.find(f => f.id === td.format)?.id || td.format
-
-      const payload = {
-        product_id: pd.productId,
-        product_name: pd.productName,
-        product_image_url: pd.imageUrl,
-        avatar_id: ad.avatarId,
-        avatar_image_url: ad.imageUrl,
-        avatar_gender: ad.gender,
-        scene: sceneHint,
-        pose: poseName,
-        style: styleName,
-        enhancements: enhancementsNames,
-        format: formatId,
-        additionalInfo: td.additionalInfo || '',
+      if (node.type === 'generate') {
+        const product = a.find(n => n.type === 'product')!
+        const avatar = a.find(n => n.type === 'avatar')!
+        const scene = a.find(n => n.type === 'scene')!
+        const settings = a.find(n => n.type === 'settings')!
+        const pd = product.data as { productId?: string; productName?: string; imageUrl?: string }
+        const ad = avatar.data as { avatarId?: string; imageUrl?: string; gender?: string }
+        const sd = scene.data as { scenarioId?: string; scenarioName?: string; customPrompt?: string }
+        const td = settings.data as { pose: string; style: string; enhancements: string[]; format: string; additionalInfo?: string }
+        const sceneHint = sd.scenarioId
+          ? SCENARIOS.find(s => s.id === sd.scenarioId)?.promptHint || sd.scenarioName
+          : sd.customPrompt
+        endpoint = 'generate-influencer-image'
+        payload = {
+          product_image: pd.imageUrl,
+          avatar_image: ad.imageUrl,
+          scene: sceneHint,
+          pose: POSES.find(p => p.id === td.pose)?.name || td.pose,
+          style: STYLES.find(s => s.id === td.style)?.name || td.style,
+          enhancements: td.enhancements.map(e => ENHANCEMENTS.find(x => x.id === e)?.name).filter(Boolean).join(', '),
+          format: FORMATS.find(f => f.id === td.format)?.id || td.format,
+          additionalInfo: td.additionalInfo || '',
+        }
+      } else {
+        // Actions baseados em Image+Prompt: edit-image / video / motion
+        const image = a.find(n => n.type === 'image' || n.type === 'product' || n.type === 'avatar')!
+        const promptN = a.find(n => n.type === 'prompt')!
+        const imgUrl = (image.data as { imageUrl?: string }).imageUrl
+        const promptText = (promptN.data as { prompt?: string }).prompt || ''
+        if (node.type === 'edit-image') {
+          endpoint = 'edit-image-inpaint'
+          payload = { image_url: imgUrl, edit_prompt: promptText }
+        } else if (node.type === 'video') {
+          const mode = (node.data as { mode?: string }).mode || 'veo-lite'
+          if (mode === 'grok') {
+            endpoint = 'generate-grok-video'
+            payload = { prompt: promptText, image_url: imgUrl }
+          } else {
+            endpoint = 'generate-veo-video'
+            payload = { prompt: promptText, image_url: imgUrl, mode: mode === 'veo-fast' ? 'fast' : 'lite' }
+          }
+        } else if (node.type === 'motion') {
+          endpoint = 'generate-motion-video'
+          payload = { image_url: imgUrl, motion_prompt: promptText }
+        }
       }
 
-      const { data, error: fnError } = await supabase.functions.invoke('generate-influencer-image', { body: payload })
-      if (fnError) throw new Error(fnError.message)
-      if (data?.error) throw new Error(data.error)
+      const r = await fetch(`https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
+        body: JSON.stringify(payload),
+      })
+      const data = await r.json()
+      if (!r.ok || data?.error) throw new Error(data?.error || `Erro ${r.status}`)
 
-      const outUrl = data?.result || data?.image_url
-      if (!outUrl) throw new Error('Resposta inesperada da IA')
-
-      setNodes(nds => nds.map(n => n.id === resolved.generateNodeId ? { ...n, data: { ...n.data, status: 'done', resultUrl: outUrl } } : n))
-      toast.success('Workflow executado!')
+      const resultUrl = data?.image_url || (data?.task_id ? undefined : data?.result)
+      // Síncrono (image): tem image_url. Async (video/motion): só task_id, vai pra Histórico
+      if (resultUrl) {
+        setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultUrl } } : n))
+        toast.success('Pronto!')
+      } else if (data?.task_id) {
+        setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultUrl: undefined, taskId: data.task_id } } : n))
+        toast.success('Vídeo na fila — acompanhe em Boosters → Grok IA → Histórico')
+      } else {
+        throw new Error('Resposta inesperada')
+      }
     } catch (err) {
-      setNodes(nds => nds.map(n => n.id === resolved.generateNodeId ? { ...n, data: { ...n.data, status: 'error', errorMessage: (err as Error).message } } : n))
+      setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'error', errorMessage: (err as Error).message } } : n))
       toast.error('Erro: ' + (err as Error).message)
     }
   }
 
-  // Injeta callbacks no node Generate sempre que workflow mudar
+  // Injeta callbacks + readiness em todos os action nodes sempre que workflow mudar
   useEffect(() => {
-    setNodes(nds => nds.map(n => n.type === 'generate' ? { ...n, data: { ...n.data, onExecute: executeWorkflow, ready } } : n))
+    setNodes(nds => nds.map(n => {
+      if (!ACTION_NODE_TYPES.has(n.type ?? '')) return n
+      const { ready, hint } = isActionReady(n)
+      return { ...n, data: { ...n.data, onExecute: () => executeAction(n), ready, readyHint: hint } }
+    }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, nodes.length, edges.length])
+  }, [nodes.length, edges.length, JSON.stringify(nodes.map(n => ({ id: n.id, data: n.data })))])
 
   // Persistência leve em localStorage
   useEffect(() => {
