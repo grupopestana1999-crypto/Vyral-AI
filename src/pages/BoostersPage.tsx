@@ -43,7 +43,7 @@ export function BoostersPage() {
       </div>
 
       <div className="px-4 py-3 rounded-xl bg-gradient-to-r from-primary-600/10 to-accent-600/10 border border-primary-500/20 text-xs text-white/80">
-        Liberamos <span className="font-semibold text-neon">3 ferramentas</span> nessa primeira versão. As outras 10 chegam conforme rodarmos as integrações.
+        <span className="font-semibold text-neon">{BOOSTERS.length} ferramentas</span> disponíveis — todas integradas via Kie.ai com créditos descontados conforme uso.
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
