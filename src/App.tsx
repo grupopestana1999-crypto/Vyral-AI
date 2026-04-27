@@ -18,6 +18,7 @@ import { ReferralPage } from './pages/ReferralPage'
 import { CreditsPage } from './pages/CreditsPage'
 import { BoosterDetailPage } from './pages/BoosterDetailPage'
 import { EditImagePage } from './pages/EditImagePage'
+import { GrokPage } from './pages/GrokPage'
 import { InfluencerLabPage } from './pages/InfluencerLabPage'
 import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminDashboard } from './pages/admin/AdminDashboard'
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="/influencer" element={<StudioPage />} />
           <Route path="/booster" element={<BoostersPage />} />
           <Route path="/booster/edit-image" element={<EditImagePage />} />
+          <Route path="/booster/grok" element={<GrokPage />} />
           <Route path="/booster/influencer-lab" element={<InfluencerLabPage />} />
           <Route path="/booster/:tool" element={<BoosterDetailPage />} />
           <Route path="/templates" element={<TemplatesPage />} />
