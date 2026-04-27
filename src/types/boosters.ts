@@ -80,7 +80,7 @@ export const BOOSTERS: BoosterDef[] = [
     tool: 'prompt_generator',
     edgeFunction: 'enhance-prompt',
     inputs: [
-      { key: 'description', label: 'Descreva o que você quer criar', type: 'textarea', placeholder: 'Ex: mulher jovem segurando creme facial em banheiro iluminado', required: true, description: '20 gerações grátis por dia · depois 1 crédito por uso' },
+      { key: 'description', label: 'Descreva o que você quer criar', type: 'textarea', placeholder: 'Ex: mulher jovem segurando creme facial em banheiro iluminado', required: true, description: '10 gerações grátis (vida toda) · depois 1 crédito por uso' },
       { key: 'type', label: 'Tipo', type: 'radio', options: [{ value: 'image', label: 'Imagem' }, { value: 'video', label: 'Vídeo' }] },
     ],
     resultType: 'text',

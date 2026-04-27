@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { resizeImageFile } from '../lib/imageUtils'
 import { BOOSTER_BY_SLUG } from '../types/boosters'
 import { TOOL_CREDITS } from '../types/credits'
+import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 
 const CREDITS = TOOL_CREDITS.edit_image
 
@@ -100,6 +101,7 @@ export function EditImagePage() {
       }
       const out = data?.image_url || data?.result
       if (typeof out === 'string' && /^https?:\/\//.test(out)) {
+        applyCreditsFromResponse(data)
         setResultUrl(out)
         toast.success('Imagem editada!')
       } else {

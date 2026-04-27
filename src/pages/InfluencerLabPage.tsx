@@ -21,6 +21,7 @@ import { useAuthStore } from '../stores/auth-store'
 import { supabase } from '../lib/supabase'
 import { ProductNode, AvatarNode, SceneNode, SettingsNode, GenerateNode, ImageNode, PromptNode, EditImageActionNode, GenerateVideoActionNode, MotionActionNode, NODE_LIBRARY } from '../components/influencer-lab/nodes'
 import { POSES, STYLES, FORMATS, ENHANCEMENTS, SCENARIOS } from '../types/studio'
+import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 
 const nodeTypes = {
   product: ProductNode,
@@ -197,9 +198,11 @@ function InfluencerLabInner() {
       const resultUrl = data?.image_url || (data?.task_id ? undefined : data?.result)
       // Síncrono (image): tem image_url. Async (video/motion): só task_id, vai pra Histórico
       if (resultUrl) {
+        applyCreditsFromResponse(data)
         setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultUrl } } : n))
         toast.success('Pronto!')
       } else if (data?.task_id) {
+        applyCreditsFromResponse(data)
         setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultUrl: undefined, taskId: data.task_id } } : n))
         toast.success('Vídeo na fila — acompanhe em Boosters → Grok IA → Histórico')
       } else {

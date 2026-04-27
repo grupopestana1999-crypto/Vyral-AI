@@ -9,6 +9,7 @@ import { POSES, STYLES, FORMATS, ENHANCEMENTS, SCENARIOS } from '../types/studio
 import { PromptGeneratorPanel } from '../components/studio/PromptGeneratorPanel'
 import { GenerationPreview } from '../components/studio/GenerationPreview'
 import { resizeImageFile } from '../lib/imageUtils'
+import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 
 const STUDIO_SESSION_KEY = 'vyral_studio_session'
 const STUDIO_SELECTIONS_KEY = 'vyral_studio_selections'
@@ -325,6 +326,7 @@ export function StudioPage() {
       }
       const url = data?.image_url
       if (typeof url === 'string' && /^https?:\/\//.test(url)) {
+        applyCreditsFromResponse(data)
         setSession(s => ({ ...s, status: 'done', resultUrl: url, generatedAt: Date.now() }))
         toast.success('Gerado com sucesso!')
         setTodayCount(prev => prev + 1)

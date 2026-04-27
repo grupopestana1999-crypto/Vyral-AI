@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { resizeImageFile } from '../lib/imageUtils'
 import { HistoryTab } from '../components/boosters/HistoryTab'
+import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 
 const CREDITS = 5
 const MAX_PROMPT = 800
@@ -56,8 +57,11 @@ export function GrokPage() {
         return
       }
       if (typeof data?.prompt === 'string') {
+        applyCreditsFromResponse(data)
         setPrompt(data.prompt.slice(0, MAX_PROMPT))
-        toast.success(data.over_limit ? 'Prompt melhorado (1 crédito)' : `Prompt melhorado (${data.uses_today}/${data.limit} grátis hoje)`)
+        const used = typeof data.uses_lifetime === 'number' ? data.uses_lifetime : data.uses_today
+        const limit = typeof data.lifetime_limit === 'number' ? data.lifetime_limit : data.limit
+        toast.success(data.over_limit ? 'Prompt melhorado (1 crédito)' : `Prompt melhorado (${used}/${limit} grátis · vida toda)`)
       }
     } catch (err) {
       toast.error('Erro: ' + (err as Error).message)
@@ -87,6 +91,7 @@ export function GrokPage() {
         return
       }
       if (data?.task_id) {
+        applyCreditsFromResponse(data)
         toast.success('Vídeo entrou na fila — acompanhe na aba Histórico')
         setTab('historico')
         setPrompt('')

@@ -18,7 +18,7 @@ export const TOOL_CREDITS = {
   kling_3: 30,
   veo_video: 5,        // default Lite; Fast cobra 8 dinamicamente na edge function
   veo_video_fast: 8,
-  prompt_generator: 0, // FREE até 20/dia, depois cobra 1/uso
+  prompt_generator: 0, // FREE 10 lifetime, depois cobra 1/uso
 } as const
 
 export const TOOL_LABELS: Record<string, string> = {
@@ -37,7 +37,7 @@ export const TOOL_LABELS: Record<string, string> = {
   prompt_generator: 'Gerador de Prompt',
 }
 
-export const FREE_DAILY_PROMPTS = 20
+export const FREE_LIFETIME_PROMPTS = 10
 export const PROMPT_OVERAGE_CREDITS = 1
 export const STUDIO_DAILY_LIMIT = 20
 
