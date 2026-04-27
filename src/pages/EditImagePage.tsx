@@ -6,8 +6,9 @@ import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { resizeImageFile } from '../lib/imageUtils'
 import { BOOSTER_BY_SLUG } from '../types/boosters'
+import { TOOL_CREDITS } from '../types/credits'
 
-const CREDITS = 5
+const CREDITS = TOOL_CREDITS.edit_image
 
 const TEMPLATES = [
   { id: 'roupa', label: 'Trocar Roupa', icon: Shirt, prompt: 'Substitua a roupa da pessoa por outra peça moderna, mantendo o estilo casual e o ambiente. Mantenha o rosto e a pose iguais.' },
