@@ -45,13 +45,19 @@ import { AdminEmail } from './pages/admin/AdminEmail'
 import { TermsPage } from './pages/TermsPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { PublicCheckoutPage } from './pages/PublicCheckoutPage'
+import { useBoosterSettings } from './stores/booster-settings-store'
 
 export default function App() {
   const initialize = useAuthStore((s: { initialize: () => Promise<void> }) => s.initialize)
+  const loadBooster = useBoosterSettings(s => s.load)
+  const subscribeBooster = useBoosterSettings(s => s.subscribe)
 
   useEffect(() => {
     initialize()
-  }, [initialize])
+    loadBooster()
+    const unsub = subscribeBooster()
+    return unsub
+  }, [initialize, loadBooster, subscribeBooster])
 
   return (
     <BrowserRouter>

@@ -55,6 +55,9 @@ export const STUDIO_DAILY_LIMIT = 20
 
 // Calcula custo dinâmico baseado no tool e parâmetros (duração, qualidade, áudio, chars).
 // Frontend usa pra preview "Gerar — X cr"; edge function usa pra debit real (autoritativo no backend).
+// Lê de booster_settings (admin pode editar em runtime). Fallback pra TOOL_CREDITS hardcoded se store ainda não carregou.
+import { useBoosterSettings } from '../stores/booster-settings-store'
+
 export interface CreditCalcOpts {
   duration_s?: number
   quality?: '720p' | '1080p'
@@ -62,41 +65,53 @@ export interface CreditCalcOpts {
   chars?: number
   veo_mode?: 'lite' | 'fast'
 }
+
+function dbCredits(tool: string, tier: string): number | null {
+  const v = useBoosterSettings.getState().getCredits(tool, tier)
+  return v == null ? null : v
+}
+
 export function calcCredits(tool: string, opts: CreditCalcOpts = {}): number {
   switch (tool) {
     case 'grok_video': {
       const sec = Math.max(1, opts.duration_s ?? 5)
-      return Math.ceil(sec * TOOL_CREDITS.grok_video_per_s)
+      const rate = dbCredits('grok_video', 'default') ?? TOOL_CREDITS.grok_video_per_s
+      return Math.ceil(sec * rate)
     }
     case 'kling_3': {
       const sec = Math.max(1, opts.duration_s ?? 5)
-      const rate = opts.audio ? TOOL_CREDITS.kling_3_per_s_with_audio : TOOL_CREDITS.kling_3_per_s_no_audio
+      const tier = opts.audio ? 'audio' : 'no_audio'
+      const rate = dbCredits('kling_3', tier) ?? (opts.audio ? TOOL_CREDITS.kling_3_per_s_with_audio : TOOL_CREDITS.kling_3_per_s_no_audio)
       return Math.ceil(sec * rate)
     }
     case 'motion_control': {
       const sec = Math.max(1, opts.duration_s ?? 5)
-      const rate = opts.quality === '1080p' ? TOOL_CREDITS.motion_control_per_s_1080 : TOOL_CREDITS.motion_control_per_s_720
+      const tier = opts.quality === '1080p' ? '1080p' : '720p'
+      const rate = dbCredits('motion_control', tier) ?? (opts.quality === '1080p' ? TOOL_CREDITS.motion_control_per_s_1080 : TOOL_CREDITS.motion_control_per_s_720)
       return Math.ceil(sec * rate)
     }
     case 'veo_video': {
-      return opts.veo_mode === 'fast' ? TOOL_CREDITS.veo_video_fast : TOOL_CREDITS.veo_video
+      const tier = opts.veo_mode === 'fast' ? 'fast' : 'lite'
+      return dbCredits('veo_video', tier) ?? (opts.veo_mode === 'fast' ? TOOL_CREDITS.veo_video_fast : TOOL_CREDITS.veo_video)
     }
     case 'voice_clone': {
       const chars = Math.max(1, opts.chars ?? 0)
-      return Math.ceil(chars / 1000 * TOOL_CREDITS.voice_clone_per_1k)
+      const rate = dbCredits('voice_clone', 'default') ?? TOOL_CREDITS.voice_clone_per_1k
+      return Math.ceil(chars / 1000 * rate)
     }
     case 'transcribe_audio': {
       const sec = Math.max(1, opts.duration_s ?? 60)
-      return Math.ceil(sec / 60 * TOOL_CREDITS.transcribe_audio_per_min)
+      const rate = dbCredits('transcribe_audio', 'default') ?? TOOL_CREDITS.transcribe_audio_per_min
+      return Math.ceil(sec / 60 * rate)
     }
     case 'studio_image':
     case 'edit_image':
     case 'avatar_creator':
     case 'skin_enhancer':
     case 'sora_remover':
-      return TOOL_CREDITS[tool]
+      return dbCredits(tool, 'default') ?? TOOL_CREDITS[tool]
     default:
-      return (TOOL_CREDITS as Record<string, number>)[tool] ?? 0
+      return dbCredits(tool, 'default') ?? (TOOL_CREDITS as Record<string, number>)[tool] ?? 0
   }
 }
 

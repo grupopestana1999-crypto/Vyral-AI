@@ -8,6 +8,7 @@ import { resizeImageFile } from '../lib/imageUtils'
 import { HistoryTab } from '../components/boosters/HistoryTab'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { calcCredits } from '../types/credits'
+import { useBoosterSettings } from '../stores/booster-settings-store'
 
 const MAX_PROMPT = 1200
 const MIN_DURATION = 3
@@ -133,7 +134,7 @@ export function FilmesIaPage() {
           <p className="text-sm text-white/50">Crie vídeos com áudio nativo e multi-frame</p>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-600/20 border border-primary-500/30 text-primary-300 text-xs font-bold">
-          7 cr/s sem áudio · 10 cr/s com áudio
+          {useBoosterSettings.getState().getCredits('kling_3', 'no_audio') ?? 7} cr/s sem áudio · {useBoosterSettings.getState().getCredits('kling_3', 'audio') ?? 10} cr/s com áudio
         </div>
       </div>
 

@@ -1,8 +1,10 @@
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
+import { useHeartbeat } from '../../hooks/useHeartbeat'
 
 export function AppLayout() {
+  useHeartbeat()
   return (
     <div className="flex min-h-dvh">
       <Sidebar />

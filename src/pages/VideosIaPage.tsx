@@ -8,6 +8,7 @@ import { resizeImageFile } from '../lib/imageUtils'
 import { HistoryTab } from '../components/boosters/HistoryTab'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { calcCredits } from '../types/credits'
+import { useBoosterSettings } from '../stores/booster-settings-store'
 import { CreditPreview } from '../components/boosters/CreditPreview'
 
 const MAX_PROMPT = 800
@@ -123,7 +124,7 @@ export function VideosIaPage() {
           <p className="text-sm text-white/50">Transforme imagens em vídeos animados com IA</p>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-600/20 border border-primary-500/30 text-primary-300 text-sm font-bold">
-          2 cr/segundo
+          {useBoosterSettings.getState().getCredits('grok_video', 'default') ?? 2} cr/segundo
         </div>
       </div>
 
@@ -229,7 +230,7 @@ export function VideosIaPage() {
             <ol className="space-y-2 list-decimal list-inside text-[13px]">
               <li>Suba uma imagem de referência (pessoa, produto, cena)</li>
               <li>Descreva o vídeo que quer gerar — ou clique <span className="text-neon">Melhorar</span> pra IA escrever pra você</li>
-              <li>Ajuste a duração ({MIN_DURATION}-{MAX_DURATION}s) — custo é 2 cr/s</li>
+              <li>Ajuste a duração ({MIN_DURATION}-{MAX_DURATION}s) — custo é {useBoosterSettings.getState().getCredits('grok_video', 'default') ?? 2} cr/s</li>
               <li>Clique Gerar — debita conforme duração e entra na fila</li>
               <li>Acompanhe o resultado na aba <span className="text-primary-400 font-medium">Histórico</span> (atualiza sozinho a cada 30s)</li>
             </ol>

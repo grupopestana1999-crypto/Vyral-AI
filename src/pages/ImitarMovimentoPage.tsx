@@ -8,6 +8,7 @@ import { resizeImageFile } from '../lib/imageUtils'
 import { HistoryTab } from '../components/boosters/HistoryTab'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { calcCredits } from '../types/credits'
+import { useBoosterSettings } from '../stores/booster-settings-store'
 import { LazyVideo } from '../components/LazyVideo'
 
 const MAX_PROMPT = 600
@@ -202,8 +203,8 @@ export function ImitarMovimentoPage() {
             <div>
               <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Qualidade</p>
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setQuality('720p')} className={`py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${quality === '720p' ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/50 hover:text-white'}`}>720p · 6 cr/s</button>
-                <button onClick={() => setQuality('1080p')} className={`py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${quality === '1080p' ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/50 hover:text-white'}`}>1080p · 9 cr/s</button>
+                <button onClick={() => setQuality('720p')} className={`py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${quality === '720p' ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/50 hover:text-white'}`}>720p · {useBoosterSettings.getState().getCredits('motion_control', '720p') ?? 6} cr/s</button>
+                <button onClick={() => setQuality('1080p')} className={`py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${quality === '1080p' ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/50 hover:text-white'}`}>1080p · {useBoosterSettings.getState().getCredits('motion_control', '1080p') ?? 9} cr/s</button>
               </div>
             </div>
 
