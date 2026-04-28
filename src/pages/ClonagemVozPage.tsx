@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Loader2, Sparkles, Trash2, Mic, Volume2, Plus } from 'lucide-react'
+import { ArrowLeft, Loader2, Sparkles, Trash2, Volume2, Wrench } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
@@ -10,7 +10,6 @@ import { calcCredits } from '../types/credits'
 const MAX_VOICES = 3
 const MIN_DURATION = 5
 const MAX_DURATION = 60
-const MAX_FILE_BYTES = 10 * 1024 * 1024
 const MAX_TEXT = 1000
 
 type Tab = 'criar' | 'gerar' | 'historico'
@@ -44,11 +43,9 @@ export function ClonagemVozPage() {
   const [voices, setVoices] = useState<Voice[]>([])
   const [history, setHistory] = useState<Generation[]>([])
 
-  // Criar voz
+  // Criar voz - desativada temporariamente (em manutenção, ver banner abaixo).
+  // Quando reativar, voltar a usar audioDataUrl/audioDuration/cloning + handleAudioFile/handleClone.
   const [voiceName, setVoiceName] = useState('')
-  const [audioDataUrl, setAudioDataUrl] = useState('')
-  const [audioDuration, setAudioDuration] = useState(0)
-  const [cloning, setCloning] = useState(false)
 
   // Gerar áudio
   const [selectedVoiceId, setSelectedVoiceId] = useState('')
@@ -77,66 +74,8 @@ export function ClonagemVozPage() {
     return () => { cancelled = true }
   }, [user?.email])
 
-  async function handleAudioFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > MAX_FILE_BYTES) { toast.error(`Arquivo muito grande (max ${MAX_FILE_BYTES / 1024 / 1024}MB)`); return }
-    const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/x-m4a', 'audio/m4a', 'audio/mp4']
-    if (!validTypes.some(t => file.type.startsWith(t.split('/')[0]))) {
-      toast.error('Formato inválido. Use MP3, WAV ou M4A.'); return
-    }
-    try {
-      const dataUrl = await fileToDataUrl(file)
-      const duration = await getAudioDuration(file)
-      if (duration < MIN_DURATION || duration > MAX_DURATION) {
-        toast.error(`Duração deve estar entre ${MIN_DURATION}s e ${MAX_DURATION}s (atual: ${duration.toFixed(1)}s)`)
-        return
-      }
-      setAudioDataUrl(dataUrl)
-      setAudioDuration(duration)
-    } catch (err) {
-      toast.error('Erro: ' + (err as Error).message)
-    } finally { e.target.value = '' }
-  }
-
-  async function handleClone() {
-    if (atVoiceLimit) { toast.error(`Limite de ${MAX_VOICES} vozes atingido. Exclua uma para adicionar outra.`); return }
-    if (!voiceName.trim() || voiceName.length < 2) { toast.error('Nome da voz precisa ter ao menos 2 chars'); return }
-    if (!audioDataUrl) { toast.error('Suba um áudio de referência'); return }
-
-    setCloning(true)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('sessão expirada')
-
-      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/clone-voice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify({ audio_data_url: audioDataUrl, name: voiceName.trim(), duration_s: audioDuration }),
-      })
-      const data = await r.json()
-      if (!r.ok || data?.error) {
-        toast.error(data?.error || `Erro ${r.status}`)
-        return
-      }
-      if (data?.voice) {
-        setVoices(v => [data.voice, ...v])
-        if (!selectedVoiceId) setSelectedVoiceId(data.voice.voice_id)
-        setVoiceName(''); setAudioDataUrl(''); setAudioDuration(0)
-        if (data.provider === 'placeholder') {
-          toast.message('Voz salva — sem clone real (Elevenlabs não configurado). TTS usará voz padrão pt-BR.')
-        } else {
-          toast.success('Voz clonada com sucesso!')
-        }
-        setTab('gerar')
-      }
-    } catch (err) {
-      toast.error('Erro: ' + (err as Error).message)
-    } finally {
-      setCloning(false)
-    }
-  }
+  // handleAudioFile + handleClone removidos enquanto banner "Em manutenção"
+  // está ativo. Restaurar do git history quando Elevenlabs voltar a funcionar.
 
   async function handleDeleteVoice(id: string) {
     if (!confirm('Deletar essa voz? A ação é irreversível.')) return
@@ -214,26 +153,22 @@ export function ClonagemVozPage() {
 
           <div>
             <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Áudio de referência ({MIN_DURATION}-{MAX_DURATION}s, max 10MB)</p>
-            <label className="block">
-              {audioDataUrl ? (
-                <div className="bg-surface-400 border border-white/10 rounded-lg p-3 cursor-pointer">
-                  <audio src={audioDataUrl} controls className="w-full" />
-                  <p className="text-[11px] text-white/40 mt-2">Duração: {audioDuration.toFixed(1)}s · Clique pra trocar</p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center gap-2 py-10 rounded-lg border-2 border-dashed border-white/15 hover:border-primary-500/50 cursor-pointer transition-colors">
-                  <Mic size={20} className="text-primary-400" />
-                  <p className="text-sm text-white/70">Suba um áudio de referência</p>
-                  <p className="text-[11px] text-white/40">MP3, WAV ou M4A · {MIN_DURATION}-{MAX_DURATION}s · até 10MB</p>
-                </div>
-              )}
-              <input type="file" accept="audio/*" className="hidden" onChange={handleAudioFile} disabled={atVoiceLimit} />
-            </label>
+            <div className="relative flex flex-col items-center justify-center gap-3 py-12 rounded-lg border-2 border-dashed border-amber-500/30 bg-amber-500/5">
+              <div className="w-12 h-12 rounded-full bg-amber-500/15 flex items-center justify-center">
+                <Wrench size={20} className="text-amber-300" />
+              </div>
+              <div className="text-center max-w-md px-4">
+                <p className="text-sm font-semibold text-amber-200">Em manutenção</p>
+                <p className="text-[12px] text-amber-100/70 mt-1 leading-relaxed">
+                  A clonagem de voz está temporariamente indisponível enquanto fazemos um ajuste na integração com o provedor de áudio. Volta em breve.
+                </p>
+              </div>
+            </div>
           </div>
 
-          <button onClick={handleClone} disabled={cloning || atVoiceLimit || !audioDataUrl || !voiceName.trim()} className="w-full py-3 rounded-xl bg-neon text-surface-500 font-bold text-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer">
-            {cloning ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-            {cloning ? 'Clonando…' : 'Clonar Voz (grátis)'}
+          <button disabled className="w-full py-3 rounded-xl bg-neon text-surface-500 font-bold text-sm opacity-40 cursor-not-allowed flex items-center justify-center gap-2">
+            <Wrench size={16} />
+            Indisponível no momento
           </button>
           <p className="text-[11px] text-white/40 text-center">Você tem {voices.length}/{MAX_VOICES} vozes salvas</p>
         </div>
@@ -327,28 +262,5 @@ export function ClonagemVozPage() {
   )
 }
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(r.result as string)
-    r.onerror = () => reject(r.error)
-    r.readAsDataURL(file)
-  })
-}
-
-function getAudioDuration(file: File): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file)
-    const audio = new Audio()
-    audio.preload = 'metadata'
-    audio.onloadedmetadata = () => {
-      URL.revokeObjectURL(url)
-      resolve(audio.duration)
-    }
-    audio.onerror = () => {
-      URL.revokeObjectURL(url)
-      reject(new Error('Falha ao ler duração do áudio'))
-    }
-    audio.src = url
-  })
-}
+// Helpers fileToDataUrl + getAudioDuration removidos enquanto upload de
+// áudio está em manutenção. Restaurar do git history quando reativar.
