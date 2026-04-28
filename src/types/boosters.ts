@@ -164,7 +164,7 @@ export const BOOSTERS: BoosterDef[] = [
     inputs: [],
     resultType: 'video',
   },
-  // 10 - Pro
+  // 10 - Pro · Em manutenção até cliente fazer upgrade Elevenlabs (Free Tier bloqueia chamadas de servidor).
   {
     id: 'voice-clone',
     slug: 'clonagem-voz',
@@ -178,6 +178,8 @@ export const BOOSTERS: BoosterDef[] = [
     minPlan: 'pro',
     inputs: [],
     resultType: 'audio',
+    locked: true,
+    emptyStateText: 'Em manutenção — voltamos em breve assim que finalizarmos o ajuste com o provedor de áudio.',
   },
   // 11 - Starter+
   {
