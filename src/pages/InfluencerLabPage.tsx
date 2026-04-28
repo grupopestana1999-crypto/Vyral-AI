@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuthStore } from '../stores/auth-store'
 import { supabase } from '../lib/supabase'
-import { ProductNode, AvatarNode, SceneNode, SettingsNode, GenerateNode, ImageNode, PromptNode, EditImageActionNode, GenerateVideoActionNode, MotionActionNode, NODE_LIBRARY } from '../components/influencer-lab/nodes'
+import { ProductNode, AvatarNode, SceneNode, SettingsNode, GenerateNode, ImageNode, PromptNode, EditImageActionNode, GenerateVideoActionNode, MotionActionNode, ScriptNode, NODE_LIBRARY } from '../components/influencer-lab/nodes'
 import { POSES, STYLES, FORMATS, ENHANCEMENTS, SCENARIOS } from '../types/studio'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 
@@ -34,9 +34,10 @@ const nodeTypes = {
   'edit-image': EditImageActionNode,
   video: GenerateVideoActionNode,
   motion: MotionActionNode,
+  script: ScriptNode,
 }
 
-const ACTION_NODE_TYPES = new Set(['generate', 'edit-image', 'video', 'motion'])
+const ACTION_NODE_TYPES = new Set(['generate', 'edit-image', 'video', 'motion', 'script'])
 
 function InfluencerLabInner() {
   const navigate = useNavigate()
@@ -57,6 +58,40 @@ function InfluencerLabInner() {
     window.addEventListener('lab-update-node', handler)
     return () => window.removeEventListener('lab-update-node', handler)
   }, [setNodes])
+
+  // Escuta eventos de duplicar e apagar disparados pelos botões no header de cada node
+  useEffect(() => {
+    function dupHandler(e: Event) {
+      const { id } = (e as CustomEvent).detail as { id: string }
+      setNodes(nds => {
+        const original = nds.find(n => n.id === id)
+        if (!original) return nds
+        // Strip funções/state runtime pra clone limpo
+        const cleanData = Object.fromEntries(
+          Object.entries(original.data || {}).filter(([k, v]) => typeof v !== 'function' && k !== 'status' && k !== 'resultUrl' && k !== 'errorMessage' && k !== 'taskId')
+        )
+        const newNode: Node = {
+          ...original,
+          id: `${original.type}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          position: { x: original.position.x + 40, y: original.position.y + 40 },
+          data: cleanData,
+          selected: false,
+        }
+        return [...nds, newNode]
+      })
+    }
+    function delHandler(e: Event) {
+      const { id } = (e as CustomEvent).detail as { id: string }
+      setNodes(nds => nds.filter(n => n.id !== id))
+      setEdges(eds => eds.filter(e => e.source !== id && e.target !== id))
+    }
+    window.addEventListener('lab-duplicate-node', dupHandler)
+    window.addEventListener('lab-delete-node', delHandler)
+    return () => {
+      window.removeEventListener('lab-duplicate-node', dupHandler)
+      window.removeEventListener('lab-delete-node', delHandler)
+    }
+  }, [setNodes, setEdges])
 
   const onConnect = useCallback((conn: Connection) => {
     setEdges(eds => addEdge({ ...conn, animated: true }, eds))
@@ -118,12 +153,41 @@ function InfluencerLabInner() {
         && ((scene.data as { scenarioId?: string; customPrompt?: string }).scenarioId || (scene.data as { customPrompt?: string }).customPrompt)
       return { ready: !!ok, hint: 'Conecte Produto + Influencer + Cena + Ajustes' }
     }
-    if (node.type === 'edit-image' || node.type === 'video' || node.type === 'motion') {
-      const image = a.find(n => n.type === 'image' || n.type === 'product' || n.type === 'avatar')
+    if (node.type === 'edit-image') {
+      // Self-contained: imagem upload no próprio node (selfImageUrl) ou via conexão Image/Product/Avatar
+      const selfImg = (node.data as { selfImageUrl?: string }).selfImageUrl
+      const editPrompt = ((node.data as { editPrompt?: string }).editPrompt || '').trim()
+      const editTemplate = (node.data as { editTemplate?: string }).editTemplate
+      const ancestor = a.find(n => n.type === 'image' || n.type === 'product' || n.type === 'avatar')
+      const ancestorImg = ancestor && (ancestor.data as { imageUrl?: string }).imageUrl
+      const hasImage = !!(selfImg || ancestorImg)
+      const hasInstruction = !!editTemplate || editPrompt.length > 0
+      return { ready: hasImage && hasInstruction, hint: 'Conecte uma imagem ou faça upload + selecione edição' }
+    }
+    if (node.type === 'video') {
+      // Self-contained: prompt no próprio node + imagem (self ou conectada)
+      const selfImg = (node.data as { selfImageUrl?: string }).selfImageUrl
+      const ancestor = a.find(n => n.type === 'image' || n.type === 'product' || n.type === 'avatar')
+      const ancestorImg = ancestor && (ancestor.data as { imageUrl?: string }).imageUrl
       const promptN = a.find(n => n.type === 'prompt')
-      const hasImage = image && (image.data as { imageUrl?: string; productId?: string; avatarId?: string }).imageUrl
-      const hasPrompt = promptN && ((promptN.data as { prompt?: string }).prompt || '').trim().length > 0
-      return { ready: !!(hasImage && hasPrompt), hint: 'Conecte Imagem + Prompt' }
+      const ownPrompt = ((node.data as { ownPrompt?: string }).ownPrompt || '').trim()
+      const ancestorPrompt = promptN && ((promptN.data as { prompt?: string }).prompt || '').trim()
+      const hasImage = !!(selfImg || ancestorImg)
+      const hasPrompt = !!(ownPrompt || ancestorPrompt)
+      return { ready: hasImage && hasPrompt, hint: 'Conecte uma imagem + cena/prompt' }
+    }
+    if (node.type === 'motion') {
+      // Self-contained: vídeo de referência no próprio node + imagem do personagem
+      const selfImg = (node.data as { selfImageUrl?: string }).selfImageUrl
+      const ancestor = a.find(n => n.type === 'image' || n.type === 'product' || n.type === 'avatar')
+      const ancestorImg = ancestor && (ancestor.data as { imageUrl?: string }).imageUrl
+      const refVideo = (node.data as { referenceVideoUrl?: string }).referenceVideoUrl
+      return { ready: !!(selfImg || ancestorImg) && !!refVideo, hint: 'Conecte uma imagem + suba vídeo de referência' }
+    }
+    if (node.type === 'script') {
+      // Self-contained: precisa só de productName preenchido
+      const productName = ((node.data as { productName?: string }).productName || '').trim()
+      return { ready: productName.length > 0, hint: 'Preencha o nome do produto' }
     }
     return { ready: false }
   }
@@ -163,17 +227,43 @@ function InfluencerLabInner() {
           format: FORMATS.find(f => f.id === td.format)?.id || td.format,
           additionalInfo: td.additionalInfo || '',
         }
+      } else if (node.type === 'script') {
+        // Gerar Roteiro: chama enhance-prompt com structured input
+        const sd = node.data as { productName?: string; tipo?: string; estilo?: string; acao?: string; camera?: string; dialogo?: string; idioma?: string }
+        const description = [
+          `Produto: ${sd.productName || ''} (Tipo: ${sd.tipo || 'Outro'})`,
+          `Estilo de vídeo: ${sd.estilo || 'UGC'}`,
+          sd.acao ? `Ação: ${sd.acao}` : '',
+          sd.camera ? `Câmera: ${sd.camera}` : '',
+          sd.dialogo?.trim() ? `Diálogo sugerido: ${sd.dialogo.trim()}` : '',
+          `Idioma: ${sd.idioma || 'Português (BR)'}`,
+        ].filter(Boolean).join('\n')
+        endpoint = 'enhance-prompt'
+        payload = { description, type: 'video', style: sd.estilo || 'ugc' }
       } else {
-        // Actions baseados em Image+Prompt: edit-image / video / motion
-        const image = a.find(n => n.type === 'image' || n.type === 'product' || n.type === 'avatar')!
-        const promptN = a.find(n => n.type === 'prompt')!
-        const imgUrl = (image.data as { imageUrl?: string }).imageUrl
-        const promptText = (promptN.data as { prompt?: string }).prompt || ''
+        // Actions self-contained: edit-image / video / motion. Aceitam dados próprios OU conectados.
+        const ancestorImg = a.find(n => n.type === 'image' || n.type === 'product' || n.type === 'avatar')
+        const promptN = a.find(n => n.type === 'prompt')
+        const nd = node.data as { selfImageUrl?: string; ownPrompt?: string; editPrompt?: string; editTemplate?: string; referenceVideoUrl?: string; mode?: string }
+        const imgUrl = nd.selfImageUrl || (ancestorImg?.data as { imageUrl?: string } | undefined)?.imageUrl
+        const ownPrompt = nd.ownPrompt?.trim()
+        const ancestorPrompt = (promptN?.data as { prompt?: string } | undefined)?.prompt?.trim()
+        const promptText = ownPrompt || ancestorPrompt || ''
+
         if (node.type === 'edit-image') {
           endpoint = 'edit-image-inpaint'
-          payload = { image_url: imgUrl, edit_prompt: promptText }
+          // Constroi prompt combinando template selecionado + detalhes extras
+          const TEMPLATE_PROMPTS: Record<string, string> = {
+            roupa: 'Substitua a roupa da pessoa por outra peça moderna, mantendo o estilo casual e o ambiente. Mantenha o rosto e a pose iguais.',
+            cenario: 'Substitua o fundo/cenário da imagem por um novo ambiente, mantendo a pessoa e o produto exatamente iguais e bem iluminados.',
+            influencer: 'Substitua a pessoa por outra(o) influencer com etnia/aparência diferentes, mantendo a roupa, pose e ambiente iguais.',
+            pose: 'Mude a pose da pessoa pra uma posição mais natural e dinâmica, mantendo o rosto, roupa e cenário iguais.',
+          }
+          const templatePrompt = nd.editTemplate ? TEMPLATE_PROMPTS[nd.editTemplate] : ''
+          const finalPrompt = [templatePrompt, nd.editPrompt?.trim()].filter(Boolean).join(' ')
+          payload = { image_url: imgUrl, edit_prompt: finalPrompt || 'Aprimorar a imagem' }
         } else if (node.type === 'video') {
-          const mode = (node.data as { mode?: string }).mode || 'veo-lite'
+          const mode = nd.mode || 'veo-lite'
           if (mode === 'grok') {
             endpoint = 'generate-grok-video'
             payload = { prompt: promptText, image_url: imgUrl }
@@ -183,7 +273,7 @@ function InfluencerLabInner() {
           }
         } else if (node.type === 'motion') {
           endpoint = 'generate-motion-video'
-          payload = { image_url: imgUrl, motion_prompt: promptText }
+          payload = { image_url: imgUrl, reference_video_url: nd.referenceVideoUrl, motion_prompt: promptText }
         }
       }
 
@@ -195,18 +285,24 @@ function InfluencerLabInner() {
       const data = await r.json()
       if (!r.ok || data?.error) throw new Error(data?.error || `Erro ${r.status}`)
 
-      const resultUrl = data?.image_url || (data?.task_id ? undefined : data?.result)
-      // Síncrono (image): tem image_url. Async (video/motion): só task_id, vai pra Histórico
-      if (resultUrl) {
+      // Script node retorna texto puro (data.prompt). Outros retornam image_url ou task_id.
+      if (node.type === 'script' && typeof data?.prompt === 'string') {
         applyCreditsFromResponse(data)
-        setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultUrl } } : n))
-        toast.success('Pronto!')
-      } else if (data?.task_id) {
-        applyCreditsFromResponse(data)
-        setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultUrl: undefined, taskId: data.task_id } } : n))
-        toast.success('Vídeo na fila — acompanhe em Boosters → Grok IA → Histórico')
+        setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultText: data.prompt } } : n))
+        toast.success('Roteiro gerado!')
       } else {
-        throw new Error('Resposta inesperada')
+        const resultUrl = data?.image_url || (data?.task_id ? undefined : data?.result)
+        if (resultUrl) {
+          applyCreditsFromResponse(data)
+          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultUrl } } : n))
+          toast.success('Pronto!')
+        } else if (data?.task_id) {
+          applyCreditsFromResponse(data)
+          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultUrl: undefined, taskId: data.task_id } } : n))
+          toast.success('Vídeo na fila — acompanhe em Boosters → Histórico')
+        } else {
+          throw new Error('Resposta inesperada')
+        }
       }
     } catch (err) {
       setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'error', errorMessage: (err as Error).message } } : n))

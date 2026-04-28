@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { Package, User, Image as ImageIcon, Sliders, Sparkles, Loader2, CheckCircle2, Upload, Wand2, Pencil, Film, Activity, MessageSquare } from 'lucide-react'
+import { Package, User, Image as ImageIcon, Sliders, Sparkles, Loader2, CheckCircle2, Upload, Wand2, Pencil, Film, Activity, MessageSquare, Copy as CopyIcon, Trash2, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { POSES, STYLES, FORMATS, ENHANCEMENTS, SCENARIOS } from '../../types/studio'
 import type { Product, Avatar } from '../../types/database'
@@ -12,6 +12,25 @@ interface LabNodeContext {
 }
 
 const baseNodeClass = 'rounded-xl bg-surface-300 border border-white/10 shadow-lg min-w-[220px] max-w-[260px]'
+
+// Botões duplicar/apagar pro header de cada node — disparam eventos que InfluencerLabPage escuta
+function NodeHeaderActions({ id }: { id: string }) {
+  function dispatch(eventName: string, e: React.MouseEvent) {
+    e.stopPropagation()
+    e.preventDefault()
+    window.dispatchEvent(new CustomEvent(eventName, { detail: { id } }))
+  }
+  return (
+    <div className="flex items-center gap-1 ml-auto">
+      <button onClick={e => dispatch('lab-duplicate-node', e)} title="Duplicar" className="p-1 rounded hover:bg-white/10 text-white/50 hover:text-white cursor-pointer">
+        <CopyIcon size={11} />
+      </button>
+      <button onClick={e => dispatch('lab-delete-node', e)} title="Apagar" className="p-1 rounded hover:bg-red-500/20 text-white/50 hover:text-red-300 cursor-pointer">
+        <Trash2 size={11} />
+      </button>
+    </div>
+  )
+}
 
 export function ProductNode({ id, data, selected }: NodeProps) {
   const [products, setProducts] = useState<Product[]>([])
@@ -35,6 +54,7 @@ export function ProductNode({ id, data, selected }: NodeProps) {
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
         <Package size={14} className="text-orange-400" />
         <span className="text-xs font-semibold text-white">Produto</span>
+        <NodeHeaderActions id={id} />
       </div>
       <div className="p-3">
         {d.productName ? (
@@ -53,13 +73,14 @@ export function ProductNode({ id, data, selected }: NodeProps) {
       </div>
       {open && (
         <div className="nodrag nowheel absolute left-full top-0 ml-2 w-72 max-h-96 overflow-y-auto bg-surface-400 border border-white/10 rounded-xl shadow-2xl p-2 z-50">
-          <p className="text-[10px] text-white/40 px-2 py-1">Produtos virais</p>
-          {products.map(p => (
-            <button key={p.id} onClick={() => select(p)} className="w-full flex gap-2 items-center p-2 rounded hover:bg-white/5 cursor-pointer text-left">
-              <img src={p.image_url} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
-              <span className="text-[11px] text-white line-clamp-2">{p.name}</span>
-            </button>
-          ))}
+          <div className="grid grid-cols-2 gap-1">
+            {products.map(p => (
+              <button key={p.id} onClick={() => select(p)} className="p-1 rounded hover:bg-white/5 cursor-pointer">
+                <img src={p.image_url} alt="" className="w-full aspect-square rounded object-cover" />
+                <p className="text-[9px] text-white/60 mt-0.5 truncate">{p.name}</p>
+              </button>
+            ))}
+          </div>
         </div>
       )}
       <Handle type="source" position={Position.Right} className="!bg-orange-400 !w-2 !h-2" />
@@ -67,22 +88,35 @@ export function ProductNode({ id, data, selected }: NodeProps) {
   )
 }
 
+// AvatarNode (ex-"Influencer"): renomeado pra "Avatar" + tab Galeria/Upload
 export function AvatarNode({ id, data, selected }: NodeProps) {
   const [avatars, setAvatars] = useState<Avatar[]>([])
   const [open, setOpen] = useState(false)
+  const [tab, setTab] = useState<'galeria' | 'upload'>('galeria')
   const [gender, setGender] = useState<'female' | 'male'>('female')
+  const [busy, setBusy] = useState(false)
   const d = data as { avatarId?: string; avatarName?: string; imageUrl?: string; gender?: 'female' | 'male' }
 
   useEffect(() => {
-    if (open && avatars.length === 0) {
+    if (open && tab === 'galeria' && avatars.length === 0) {
       supabase.from('avatars').select('*').eq('is_active', true)
         .then(({ data }) => setAvatars((data as Avatar[]) || []))
     }
-  }, [open, avatars.length])
+  }, [open, tab, avatars.length])
 
   function select(a: Avatar) {
     window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { avatarId: a.id, avatarName: a.name, imageUrl: a.image_url, gender: a.gender } } }))
     setOpen(false)
+  }
+
+  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    setBusy(true)
+    try {
+      const url = await resizeImageFile(file, 1024, 0.85)
+      window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { avatarId: 'upload', avatarName: 'Avatar customizado', imageUrl: url } } }))
+      setOpen(false)
+    } finally { setBusy(false); e.target.value = '' }
   }
 
   const filtered = avatars.filter(a => a.gender === gender)
@@ -92,7 +126,8 @@ export function AvatarNode({ id, data, selected }: NodeProps) {
       <Handle type="target" position={Position.Left} className="!bg-pink-400 !w-2 !h-2" />
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
         <User size={14} className="text-pink-400" />
-        <span className="text-xs font-semibold text-white">Influencer</span>
+        <span className="text-xs font-semibold text-white">Avatar</span>
+        <NodeHeaderActions id={id} />
       </div>
       <div className="p-3">
         {d.avatarName ? (
@@ -112,17 +147,32 @@ export function AvatarNode({ id, data, selected }: NodeProps) {
       {open && (
         <div className="nodrag nowheel absolute left-full top-0 ml-2 w-72 max-h-96 overflow-y-auto bg-surface-400 border border-white/10 rounded-xl shadow-2xl p-2 z-50">
           <div className="flex gap-1 mb-2">
-            <button onClick={() => setGender('female')} className={`flex-1 py-1 rounded text-[10px] ${gender === 'female' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Feminino</button>
-            <button onClick={() => setGender('male')} className={`flex-1 py-1 rounded text-[10px] ${gender === 'male' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Masculino</button>
+            <button onClick={() => setTab('galeria')} className={`flex-1 py-1 rounded text-[10px] ${tab === 'galeria' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Galeria</button>
+            <button onClick={() => setTab('upload')} className={`flex-1 py-1 rounded text-[10px] ${tab === 'upload' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Upload</button>
           </div>
-          <div className="grid grid-cols-2 gap-1">
-            {filtered.map(a => (
-              <button key={a.id} onClick={() => select(a)} className="p-1 rounded hover:bg-white/5 cursor-pointer">
-                <img src={a.image_url} alt="" className="w-full aspect-square rounded object-cover" />
-                <p className="text-[9px] text-white/60 mt-0.5 truncate">{a.name}</p>
-              </button>
-            ))}
-          </div>
+          {tab === 'galeria' ? (
+            <>
+              <div className="flex gap-1 mb-2">
+                <button onClick={() => setGender('female')} className={`flex-1 py-1 rounded text-[10px] ${gender === 'female' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Feminino</button>
+                <button onClick={() => setGender('male')} className={`flex-1 py-1 rounded text-[10px] ${gender === 'male' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Masculino</button>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                {filtered.map(a => (
+                  <button key={a.id} onClick={() => select(a)} className="p-1 rounded hover:bg-white/5 cursor-pointer">
+                    <img src={a.image_url} alt="" className="w-full aspect-square rounded object-cover" />
+                    <p className="text-[9px] text-white/60 mt-0.5 truncate">{a.name}</p>
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <label className="flex flex-col items-center gap-2 py-8 rounded border border-dashed border-white/20 hover:border-primary-500/50 cursor-pointer">
+              {busy ? <Loader2 size={18} className="text-primary-400 animate-spin" /> : <Upload size={18} className="text-pink-400" />}
+              <span className="text-[10px] text-white/60">{busy ? 'Enviando…' : 'Subir foto'}</span>
+              <span className="text-[9px] text-white/30">PNG, JPG até 7MB</span>
+              <input type="file" accept="image/*" className="hidden" onChange={onUpload} />
+            </label>
+          )}
         </div>
       )}
       <Handle type="source" position={Position.Right} className="!bg-pink-400 !w-2 !h-2" />
@@ -130,17 +180,28 @@ export function AvatarNode({ id, data, selected }: NodeProps) {
   )
 }
 
+// SceneNode: tabs Prontas / Personalizada / Upload (NEW: tab Upload de foto do ambiente)
 export function SceneNode({ id, data, selected }: NodeProps) {
   const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState<'ready' | 'custom'>('ready')
-  const d = data as { scenarioId?: string; scenarioName?: string; customPrompt?: string }
+  const [tab, setTab] = useState<'ready' | 'custom' | 'upload'>('ready')
+  const [busy, setBusy] = useState(false)
+  const d = data as { scenarioId?: string; scenarioName?: string; customPrompt?: string; sceneImageUrl?: string }
 
   function selectReady(s: { id: string; name: string }) {
-    window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { scenarioId: s.id, scenarioName: s.name, customPrompt: undefined } } }))
+    window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { scenarioId: s.id, scenarioName: s.name, customPrompt: undefined, sceneImageUrl: undefined } } }))
     setOpen(false)
   }
   function saveCustom(prompt: string) {
-    window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { scenarioId: undefined, scenarioName: 'Personalizada', customPrompt: prompt } } }))
+    window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { scenarioId: undefined, scenarioName: 'Personalizada', customPrompt: prompt, sceneImageUrl: undefined } } }))
+  }
+  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    setBusy(true)
+    try {
+      const url = await resizeImageFile(file, 1280, 0.85)
+      window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { scenarioId: undefined, scenarioName: 'Foto do ambiente', customPrompt: undefined, sceneImageUrl: url } } }))
+      setOpen(false)
+    } finally { setBusy(false); e.target.value = '' }
   }
 
   return (
@@ -149,10 +210,12 @@ export function SceneNode({ id, data, selected }: NodeProps) {
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
         <ImageIcon size={14} className="text-emerald-400" />
         <span className="text-xs font-semibold text-white">Cena</span>
+        <NodeHeaderActions id={id} />
       </div>
       <div className="p-3">
-        {d.scenarioName || d.customPrompt ? (
+        {d.scenarioName || d.customPrompt || d.sceneImageUrl ? (
           <button onClick={() => setOpen(true)} className="w-full text-left cursor-pointer">
+            {d.sceneImageUrl && <img src={d.sceneImageUrl} alt="" className="w-full rounded mb-1 object-cover" />}
             <p className="text-[11px] text-white truncate">{d.scenarioName || 'Personalizada'}</p>
             {d.customPrompt && <p className="text-[9px] text-white/50 line-clamp-2">{d.customPrompt}</p>}
             <p className="text-[9px] text-primary-400 mt-0.5">Trocar</p>
@@ -167,9 +230,10 @@ export function SceneNode({ id, data, selected }: NodeProps) {
         <div className="nodrag nowheel absolute left-full top-0 ml-2 w-72 max-h-96 overflow-y-auto bg-surface-400 border border-white/10 rounded-xl shadow-2xl p-2 z-50">
           <div className="flex gap-1 mb-2">
             <button onClick={() => setTab('ready')} className={`flex-1 py-1 rounded text-[10px] ${tab === 'ready' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Prontas</button>
-            <button onClick={() => setTab('custom')} className={`flex-1 py-1 rounded text-[10px] ${tab === 'custom' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Personalizada</button>
+            <button onClick={() => setTab('custom')} className={`flex-1 py-1 rounded text-[10px] ${tab === 'custom' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Descrever</button>
+            <button onClick={() => setTab('upload')} className={`flex-1 py-1 rounded text-[10px] ${tab === 'upload' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Upload</button>
           </div>
-          {tab === 'ready' ? (
+          {tab === 'ready' && (
             <div className="grid grid-cols-2 gap-1">
               {SCENARIOS.map(s => (
                 <button key={s.id} onClick={() => selectReady(s)} className="p-1 rounded hover:bg-white/5 cursor-pointer text-left">
@@ -178,7 +242,8 @@ export function SceneNode({ id, data, selected }: NodeProps) {
                 </button>
               ))}
             </div>
-          ) : (
+          )}
+          {tab === 'custom' && (
             <div>
               <textarea
                 defaultValue={d.customPrompt || ''}
@@ -189,6 +254,14 @@ export function SceneNode({ id, data, selected }: NodeProps) {
               />
               <p className="text-[9px] text-white/40 mt-1">Clica fora pra salvar</p>
             </div>
+          )}
+          {tab === 'upload' && (
+            <label className="flex flex-col items-center gap-2 py-8 rounded border border-dashed border-white/20 hover:border-primary-500/50 cursor-pointer">
+              {busy ? <Loader2 size={18} className="text-primary-400 animate-spin" /> : <Upload size={18} className="text-emerald-400" />}
+              <span className="text-[10px] text-white/60">{busy ? 'Enviando…' : 'Subir foto do ambiente'}</span>
+              <span className="text-[9px] text-white/30">PNG, JPG até 7MB</span>
+              <input type="file" accept="image/*" className="hidden" onChange={onUpload} />
+            </label>
           )}
         </div>
       )}
@@ -205,8 +278,8 @@ export function SettingsNode({ id, data, selected }: NodeProps) {
     window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { ...d, ...patch } } }))
   }
 
-  function toggleEnh(id: string) {
-    const next = d.enhancements.includes(id) ? d.enhancements.filter(e => e !== id) : [...d.enhancements, id]
+  function toggleEnh(eid: string) {
+    const next = d.enhancements.includes(eid) ? d.enhancements.filter(e => e !== eid) : [...d.enhancements, eid]
     update({ enhancements: next })
   }
 
@@ -220,6 +293,7 @@ export function SettingsNode({ id, data, selected }: NodeProps) {
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
         <Sliders size={14} className="text-sky-400" />
         <span className="text-xs font-semibold text-white">Ajustes</span>
+        <NodeHeaderActions id={id} />
       </div>
       <button onClick={() => setOpen(o => !o)} className="w-full p-3 text-left cursor-pointer">
         <p className="text-[10px] text-white/60">{poseName} · {styleName} · {formatName}</p>
@@ -285,7 +359,7 @@ export function SettingsNode({ id, data, selected }: NodeProps) {
   )
 }
 
-export function GenerateNode({ data, selected }: NodeProps) {
+export function GenerateNode({ id, data, selected }: NodeProps) {
   const d = data as { status: string; resultUrl?: string; onExecute?: () => void; ready?: boolean }
 
   return (
@@ -294,6 +368,7 @@ export function GenerateNode({ data, selected }: NodeProps) {
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
         <Sparkles size={14} className="text-violet-400" />
         <span className="text-xs font-semibold text-white">Gerar Imagem</span>
+        <NodeHeaderActions id={id} />
       </div>
       <div className="p-3 space-y-2">
         <button
@@ -323,7 +398,7 @@ export function GenerateNode({ data, selected }: NodeProps) {
   )
 }
 
-// Input node: upload livre de imagem (não atrelado a produto/avatar)
+// ImageNode: upload livre de imagem (não atrelado a produto/avatar)
 export function ImageNode({ id, data, selected }: NodeProps) {
   const d = data as { imageUrl?: string }
   const [busy, setBusy] = useState(false)
@@ -342,6 +417,7 @@ export function ImageNode({ id, data, selected }: NodeProps) {
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
         <ImageIcon size={14} className="text-cyan-400" />
         <span className="text-xs font-semibold text-white">Imagem</span>
+        <NodeHeaderActions id={id} />
       </div>
       <div className="p-3">
         {d.imageUrl ? (
@@ -363,7 +439,7 @@ export function ImageNode({ id, data, selected }: NodeProps) {
   )
 }
 
-// Input node: prompt livre + botão melhorar
+// PromptNode: prompt livre + botão melhorar
 export function PromptNode({ id, data, selected }: NodeProps) {
   const d = data as { prompt?: string }
   const [enhancing, setEnhancing] = useState(false)
@@ -396,6 +472,7 @@ export function PromptNode({ id, data, selected }: NodeProps) {
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
         <MessageSquare size={14} className="text-amber-400" />
         <span className="text-xs font-semibold text-white">Prompt</span>
+        <NodeHeaderActions id={id} />
       </div>
       <div className="p-3 space-y-2">
         <textarea
@@ -420,105 +497,387 @@ export function PromptNode({ id, data, selected }: NodeProps) {
   )
 }
 
-// Helper genérico pra nodes de ação (Edit / Video / Motion)
-function ActionNodeShell({ icon: Icon, color, label, data, children, statusBg }: {
-  icon: typeof Package; color: string; label: string;
-  data: { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean; readyHint?: string; mediaType?: 'image' | 'video' };
-  children?: React.ReactNode; statusBg: string;
-}) {
-  const status = data.status || 'idle'
+// EditImageActionNode: self-contained — foto referência (slot) + 4 templates + textarea + botão Editar
+export function EditImageActionNode({ id, data, selected }: NodeProps) {
+  const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean; selfImageUrl?: string; editTemplate?: string; editPrompt?: string }
+  const [busy, setBusy] = useState(false)
+  const status = d.status || 'idle'
+
+  function update(patch: Record<string, unknown>) {
+    window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: patch } }))
+  }
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    setBusy(true)
+    try {
+      const url = await resizeImageFile(file, 1280, 0.85)
+      update({ selfImageUrl: url })
+    } finally { setBusy(false); e.target.value = '' }
+  }
+
+  const templates = [
+    { id: 'roupa', label: 'Trocar Roupa', icon: '👕' },
+    { id: 'cenario', label: 'Trocar Cenário', icon: '🌅' },
+    { id: 'influencer', label: 'Trocar Influencer', icon: '👤' },
+    { id: 'pose', label: 'Trocar Pose', icon: '🤸' },
+  ]
+
   return (
-    <div className={`${baseNodeClass} ${statusBg}`}>
-      <Handle type="target" position={Position.Left} className={`!w-2 !h-2 ${color}`} />
+    <div className={`${baseNodeClass} ${selected ? 'ring-2 ring-primary-500' : ''}`}>
+      <Handle type="target" position={Position.Left} className="!bg-fuchsia-400 !w-2 !h-2" />
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
-        <Icon size={14} className={color.replace('!bg-', 'text-')} />
-        <span className="text-xs font-semibold text-white">{label}</span>
+        <Pencil size={14} className="text-fuchsia-400" />
+        <span className="text-xs font-semibold text-white">Editar Imagem</span>
+        <NodeHeaderActions id={id} />
       </div>
       <div className="p-3 space-y-2">
-        {children}
+        <label className="block cursor-pointer">
+          {d.selfImageUrl ? (
+            <img src={d.selfImageUrl} alt="" className="w-full rounded object-cover aspect-square" />
+          ) : (
+            <div className="w-full flex flex-col items-center gap-1 py-4 rounded border border-dashed border-white/20 hover:border-fuchsia-500/50">
+              {busy ? <Loader2 size={14} className="text-fuchsia-400 animate-spin" /> : <Upload size={14} className="text-fuchsia-400" />}
+              <span className="text-[9px] text-white/50">⚠ Conecte uma imagem ou suba aqui</span>
+            </div>
+          )}
+          <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+        </label>
+
+        <div className="grid grid-cols-1 gap-1">
+          {templates.map(t => (
+            <button
+              key={t.id}
+              onClick={() => update({ editTemplate: t.id })}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium cursor-pointer ${d.editTemplate === t.id ? 'bg-fuchsia-600 text-white' : 'bg-surface-400 text-white/60 hover:text-white'}`}
+            >
+              <span>{t.icon}</span>
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <textarea
+          value={d.editPrompt || ''}
+          onChange={e => update({ editPrompt: e.target.value.slice(0, 400) })}
+          placeholder="Detalhes extras (opcional)..."
+          rows={2}
+          className="nodrag w-full p-1.5 bg-surface-400 border border-white/10 rounded text-[10px] text-white placeholder:text-white/30 resize-none focus:outline-none focus:border-primary-500"
+        />
+
         <button
-          onClick={() => data.onExecute?.()}
-          disabled={status === 'generating' || !data.ready}
-          className="w-full py-2 rounded-lg bg-neon text-surface-500 text-[11px] font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1"
+          onClick={() => d.onExecute?.()}
+          disabled={status === 'generating' || !d.ready}
+          className="w-full py-1.5 rounded bg-neon text-surface-500 text-[11px] font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1"
         >
-          {status === 'generating' ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-          {status === 'generating' ? 'Gerando…' : status === 'done' ? 'Gerar de novo' : 'Executar'}
+          {status === 'generating' ? <Loader2 size={11} className="animate-spin" /> : <Pencil size={11} />}
+          {status === 'generating' ? 'Editando…' : 'Editar'}
         </button>
-        {!data.ready && status !== 'done' && <p className="text-[9px] text-yellow-400/80 text-center">{data.readyHint || 'Conecte os inputs'}</p>}
-        {status === 'done' && data.resultUrl && (
-          data.mediaType === 'video'
-            ? <video src={data.resultUrl} className="w-full rounded" controls preload="metadata" />
-            : <img src={data.resultUrl} alt="" className="w-full rounded" />
-        )}
-        {status === 'done' && !data.resultUrl && <p className="text-[9px] text-amber-400 text-center">Em processamento — veja Histórico</p>}
-        {status === 'error' && <p className="text-[9px] text-red-400 text-center">{data.errorMessage || 'Erro'}</p>}
+        <p className="text-[9px] text-white/40 text-center">2 cr · nano-banana</p>
+        {status === 'done' && d.resultUrl && <img src={d.resultUrl} alt="" className="w-full rounded" />}
+        {status === 'error' && <p className="text-[9px] text-red-400 text-center">{d.errorMessage || 'Erro'}</p>}
       </div>
     </div>
   )
 }
 
-// Action: Editar Imagem (input Image+Prompt → edit-image-inpaint, 1 cr)
-export function EditImageActionNode({ data, selected }: NodeProps) {
-  const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean }
-  return (
-    <ActionNodeShell
-      icon={Pencil} color="!bg-fuchsia-400" label="Editar Imagem"
-      data={{ ...d, mediaType: 'image', readyHint: 'Conecte Imagem + Prompt' }}
-      statusBg={selected ? 'ring-2 ring-primary-500' : ''}
-    >
-      <p className="text-[9px] text-white/40 text-center">1 crédito · nano-banana</p>
-    </ActionNodeShell>
-  )
-}
-
-// Action: Gerar Vídeo (input Image+Prompt → veo-lite/fast OU grok)
+// GenerateVideoActionNode: self-contained com prompt + dropdown modelo + 2 avisos visíveis
 export function GenerateVideoActionNode({ id, data, selected }: NodeProps) {
-  const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean; mode?: 'veo-lite' | 'veo-fast' | 'grok' }
+  const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean; mode?: 'veo-lite' | 'veo-fast' | 'grok'; selfImageUrl?: string; ownPrompt?: string }
+  const [busy, setBusy] = useState(false)
   const mode = d.mode || 'veo-lite'
-  function setMode(m: typeof mode) {
-    window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { ...d, mode: m } } }))
+  const status = d.status || 'idle'
+
+  function update(patch: Record<string, unknown>) {
+    window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: patch } }))
   }
-  const credits = mode === 'veo-fast' ? 8 : 5
-  const label = mode === 'veo-fast' ? 'Veo 3.1 Fast' : mode === 'grok' ? 'Grok IA' : 'Veo 3.1 Lite'
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    setBusy(true)
+    try {
+      const url = await resizeImageFile(file, 1280, 0.85)
+      update({ selfImageUrl: url })
+    } finally { setBusy(false); e.target.value = '' }
+  }
+
+  const credits = mode === 'veo-fast' ? 30 : mode === 'grok' ? 2 : 15
+  const modeLabel = mode === 'veo-fast' ? 'Veo 3.1 Fast — 30 créditos' : mode === 'grok' ? 'Grok IA — 2 cr/s' : 'Veo 3.1 Lite — 15 créditos'
 
   return (
-    <ActionNodeShell
-      icon={Film} color="!bg-blue-400" label="Gerar Vídeo"
-      data={{ ...d, mediaType: 'video', readyHint: 'Conecte Imagem + Prompt' }}
-      statusBg={selected ? 'ring-2 ring-primary-500' : ''}
-    >
-      <div className="grid grid-cols-3 gap-1">
-        {(['veo-lite', 'veo-fast', 'grok'] as const).map(m => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
-            className={`py-1 rounded text-[9px] font-medium cursor-pointer ${mode === m ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/60 hover:text-white'}`}
-          >{m === 'veo-lite' ? 'Lite' : m === 'veo-fast' ? 'Fast' : 'Grok'}</button>
-        ))}
+    <div className={`${baseNodeClass} ${selected ? 'ring-2 ring-primary-500' : ''}`}>
+      <Handle type="target" position={Position.Left} className="!bg-blue-400 !w-2 !h-2" />
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
+        <Film size={14} className="text-blue-400" />
+        <span className="text-xs font-semibold text-white">Gerar Vídeo</span>
+        <NodeHeaderActions id={id} />
       </div>
-      <p className="text-[9px] text-white/40 text-center">{label} · {credits} créditos</p>
-    </ActionNodeShell>
+      <div className="p-3 space-y-2">
+        {/* Slot imagem (self ou conectado) */}
+        <label className="block cursor-pointer">
+          {d.selfImageUrl ? (
+            <img src={d.selfImageUrl} alt="" className="w-full rounded object-cover" />
+          ) : (
+            <div className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded border border-dashed border-white/15 hover:border-blue-500/50">
+              <Upload size={11} className="text-white/30" />
+              <span className="text-[9px] text-white/40">⚠ Conecte um node com imagem</span>
+            </div>
+          )}
+          <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+        </label>
+
+        {/* Slot prompt (self ou conectado) */}
+        <div className="px-2 py-1.5 rounded border border-white/10 bg-surface-400/50">
+          <p className="text-[9px] text-white/40 mb-1">⚠ Conecte uma cena ou escreva abaixo</p>
+        </div>
+
+        <div>
+          <p className="text-[9px] text-white/40 mb-1">PROMPT</p>
+          <textarea
+            value={d.ownPrompt || ''}
+            onChange={e => update({ ownPrompt: e.target.value.slice(0, 800) })}
+            placeholder="Descreva o vídeo que quer gerar..."
+            rows={3}
+            className="nodrag w-full p-1.5 bg-surface-400 border border-white/10 rounded text-[10px] text-white placeholder:text-white/30 resize-none focus:outline-none focus:border-primary-500"
+          />
+        </div>
+
+        <div>
+          <p className="text-[9px] text-white/40 mb-1">MODELO</p>
+          <select
+            value={mode}
+            onChange={e => update({ mode: e.target.value })}
+            className="nodrag w-full p-1.5 bg-surface-400 border border-blue-500/40 rounded text-[10px] text-white focus:outline-none focus:border-blue-500"
+          >
+            <option value="veo-lite">🎬 Veo 3.1 Lite — 15 créditos</option>
+            <option value="veo-fast">🎬 Veo 3.1 Fast — 30 créditos</option>
+            <option value="grok">⚡ Grok IA — 2 cr/s</option>
+          </select>
+        </div>
+
+        {busy && <Loader2 size={12} className="text-primary-400 animate-spin mx-auto" />}
+
+        <button
+          onClick={() => d.onExecute?.()}
+          disabled={status === 'generating' || !d.ready}
+          className="w-full py-1.5 rounded bg-neon text-surface-500 text-[11px] font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1"
+        >
+          {status === 'generating' ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+          {status === 'generating' ? 'Gerando…' : 'Gerar'}
+        </button>
+        <p className="text-[9px] text-white/40 text-center">{modeLabel}{mode !== 'grok' ? ` (${credits} cr)` : ''}</p>
+        {status === 'done' && d.resultUrl && <video src={d.resultUrl} controls className="w-full rounded" />}
+        {status === 'done' && !d.resultUrl && <p className="text-[9px] text-amber-400 text-center">Em processamento — veja Histórico</p>}
+        {status === 'error' && <p className="text-[9px] text-red-400 text-center">{d.errorMessage || 'Erro'}</p>}
+      </div>
+    </div>
   )
 }
 
-// Action: Imitar Movimento (input Image+Prompt → Kling Motion Control)
-export function MotionActionNode({ data, selected }: NodeProps) {
-  const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean }
+// MotionActionNode: self-contained — slot imagem + upload vídeo ref + textarea opcional + botão
+export function MotionActionNode({ id, data, selected }: NodeProps) {
+  const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean; selfImageUrl?: string; referenceVideoUrl?: string; ownPrompt?: string }
+  const [busy, setBusy] = useState(false)
+  const status = d.status || 'idle'
+
+  function update(patch: Record<string, unknown>) {
+    window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: patch } }))
+  }
+
+  async function onImageFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    setBusy(true)
+    try {
+      const url = await resizeImageFile(file, 1280, 0.85)
+      update({ selfImageUrl: url })
+    } finally { setBusy(false); e.target.value = '' }
+  }
+
+  async function onVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    if (file.size > 30 * 1024 * 1024) { alert('Vídeo muito grande (max 30MB)'); e.target.value = ''; return }
+    // Pra evitar bater limite ~6MB do edge fn body, sobe pro Storage e armazena URL pública.
+    setBusy(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('sessão expirada')
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4'
+      const filename = `motion-uploads/${user.id}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('public-media').upload(filename, file, { contentType: file.type, upsert: false })
+      if (upErr) throw upErr
+      const { data: pub } = supabase.storage.from('public-media').getPublicUrl(filename)
+      if (pub?.publicUrl) update({ referenceVideoUrl: pub.publicUrl })
+    } catch (err) {
+      alert('Erro ao subir vídeo: ' + (err as Error).message)
+    } finally { setBusy(false); e.target.value = '' }
+  }
+
   return (
-    <ActionNodeShell
-      icon={Activity} color="!bg-rose-400" label="Imitar Movimento"
-      data={{ ...d, mediaType: 'video', readyHint: 'Conecte Imagem + Prompt' }}
-      statusBg={selected ? 'ring-2 ring-primary-500' : ''}
-    >
-      <p className="text-[9px] text-white/40 text-center">6 cr/s 720p · Kling Motion</p>
-    </ActionNodeShell>
+    <div className={`${baseNodeClass} ${selected ? 'ring-2 ring-primary-500' : ''}`}>
+      <Handle type="target" position={Position.Left} className="!bg-rose-400 !w-2 !h-2" />
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
+        <Activity size={14} className="text-rose-400" />
+        <span className="text-xs font-semibold text-white">Imitar Movimento</span>
+        <NodeHeaderActions id={id} />
+      </div>
+      <div className="p-3 space-y-2">
+        {/* Slot imagem do personagem (self ou conectado) */}
+        <label className="block cursor-pointer">
+          {d.selfImageUrl ? (
+            <img src={d.selfImageUrl} alt="" className="w-full rounded object-cover aspect-square" />
+          ) : (
+            <div className="w-full flex items-center gap-1.5 px-2 py-2 rounded border border-dashed border-white/15 hover:border-rose-500/50">
+              <Upload size={11} className="text-white/30" />
+              <span className="text-[9px] text-white/40">⚠ Conecte um node com imagem</span>
+            </div>
+          )}
+          <input type="file" accept="image/*" className="hidden" onChange={onImageFile} />
+        </label>
+
+        {/* Upload vídeo de referência */}
+        <label className="block cursor-pointer">
+          {d.referenceVideoUrl ? (
+            <video src={d.referenceVideoUrl} className="w-full rounded" muted playsInline />
+          ) : (
+            <div className="flex flex-col items-center gap-1 py-3 rounded border border-dashed border-white/20 hover:border-rose-500/50">
+              {busy ? <Loader2 size={14} className="text-rose-400 animate-spin" /> : <Upload size={14} className="text-rose-400" />}
+              <span className="text-[9px] text-white/60">{busy ? 'Enviando…' : 'Upload vídeo referência'}</span>
+              <span className="text-[9px] text-white/30">MP4 até 30MB</span>
+            </div>
+          )}
+          <input type="file" accept="video/*" className="hidden" onChange={onVideoFile} />
+        </label>
+
+        <div>
+          <p className="text-[9px] text-white/40 mb-1">PROMPT (OPCIONAL)</p>
+          <textarea
+            value={d.ownPrompt || ''}
+            onChange={e => update({ ownPrompt: e.target.value.slice(0, 400) })}
+            placeholder="Detalhes adicionais..."
+            rows={2}
+            className="nodrag w-full p-1.5 bg-surface-400 border border-white/10 rounded text-[10px] text-white placeholder:text-white/30 resize-none focus:outline-none focus:border-primary-500"
+          />
+        </div>
+
+        <button
+          onClick={() => d.onExecute?.()}
+          disabled={status === 'generating' || !d.ready}
+          className="w-full py-1.5 rounded bg-neon text-surface-500 text-[11px] font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1"
+        >
+          {status === 'generating' ? <Loader2 size={11} className="animate-spin" /> : <Activity size={11} />}
+          {status === 'generating' ? 'Processando…' : 'Imitar Movimento'}
+        </button>
+        <p className="text-[9px] text-white/40 text-center">6 cr/s 720p · Kling Motion</p>
+        {status === 'done' && d.resultUrl && <video src={d.resultUrl} controls className="w-full rounded" />}
+        {status === 'done' && !d.resultUrl && <p className="text-[9px] text-amber-400 text-center">Processando — veja Histórico</p>}
+        {status === 'error' && <p className="text-[9px] text-red-400 text-center">{d.errorMessage || 'Erro'}</p>}
+      </div>
+    </div>
+  )
+}
+
+// ScriptNode (NEW): Gerar Roteiro — structured input chama enhance-prompt e devolve texto
+export function ScriptNode({ id, data, selected }: NodeProps) {
+  const d = data as { status?: string; resultText?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean; productName?: string; tipo?: string; estilo?: string; acao?: string; camera?: string; dialogo?: string; idioma?: string }
+  const status = d.status || 'idle'
+
+  function update(patch: Record<string, unknown>) {
+    window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: patch } }))
+  }
+
+  return (
+    <div className={`${baseNodeClass} ${selected ? 'ring-2 ring-primary-500' : ''}`}>
+      <Handle type="target" position={Position.Left} className="!bg-violet-400 !w-2 !h-2" />
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
+        <FileText size={14} className="text-violet-400" />
+        <span className="text-xs font-semibold text-white">Gerar Roteiro</span>
+        <NodeHeaderActions id={id} />
+      </div>
+      <div className="p-3 space-y-2">
+        <input
+          type="text"
+          value={d.productName || ''}
+          onChange={e => update({ productName: e.target.value.slice(0, 80) })}
+          placeholder="Nome do produto…"
+          className="nodrag w-full px-2 py-1.5 bg-surface-400 border border-violet-500/40 rounded text-[10px] text-white placeholder:text-white/30 focus:outline-none focus:border-violet-500"
+        />
+
+        <FieldSelect id={id} label="Tipo" field="tipo" value={d.tipo} options={[
+          { v: 'outro', l: '📦 Outro' }, { v: 'skincare', l: '🧴 Skincare' }, { v: 'roupa', l: '👕 Roupa' },
+          { v: 'tech', l: '📱 Tech' }, { v: 'alimento', l: '🍫 Alimento' }, { v: 'casa', l: '🏠 Casa' },
+        ]} />
+
+        <FieldSelect id={id} label="Estilo" field="estilo" value={d.estilo || 'ugc'} options={[
+          { v: 'ugc', l: '🎬 UGC' }, { v: 'especialista', l: '🎓 Especialista' }, { v: 'vendedor', l: '💸 Vendedor' },
+          { v: 'depoimento', l: '💬 Depoimento' }, { v: 'gancho', l: '🪝 Gancho' }, { v: 'storyteller', l: '📖 Storyteller' },
+        ]} />
+
+        <FieldSelect id={id} label="Ação" field="acao" value={d.acao} options={[
+          { v: '', l: 'Selecionar...' }, { v: 'usando', l: 'Usando o produto' }, { v: 'mostrando', l: 'Mostrando' },
+          { v: 'depoimento', l: 'Depoimento' }, { v: 'comparando', l: 'Comparando' },
+        ]} />
+
+        <FieldSelect id={id} label="Câmera" field="camera" value={d.camera} options={[
+          { v: '', l: 'Selecionar...' }, { v: 'parada', l: '📹 Parada' }, { v: 'pov', l: '👁️ POV' },
+          { v: 'panoramica', l: '🎥 Panorâmica' }, { v: 'zoom-in', l: '🔎 Zoom in' },
+        ]} />
+
+        <div>
+          <p className="text-[9px] text-white/40 mb-1">Diálogo <span className="text-white/30">opcional</span></p>
+          <textarea
+            value={d.dialogo || ''}
+            onChange={e => update({ dialogo: e.target.value.slice(0, 200) })}
+            placeholder="Ex: Gente, olha isso..."
+            rows={2}
+            className="nodrag w-full p-1.5 bg-surface-400 border border-white/10 rounded text-[10px] text-white placeholder:text-white/30 resize-none focus:outline-none focus:border-violet-500"
+          />
+        </div>
+
+        <FieldSelect id={id} label="Idioma" field="idioma" value={d.idioma || 'pt-BR'} options={[
+          { v: 'pt-BR', l: '🇧🇷 Português (BR)' }, { v: 'en', l: '🇺🇸 English' }, { v: 'es', l: '🇪🇸 Español' },
+        ]} />
+
+        <button
+          onClick={() => d.onExecute?.()}
+          disabled={status === 'generating' || !d.ready}
+          className="w-full py-1.5 rounded bg-neon text-surface-500 text-[11px] font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1"
+        >
+          {status === 'generating' ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+          {status === 'generating' ? 'Gerando…' : 'Gerar Prompt'}
+        </button>
+        <p className="text-[9px] text-white/40 text-center">10 grátis lifetime · 1 cr depois</p>
+
+        {status === 'done' && d.resultText && (
+          <div className="bg-surface-400 border border-white/5 rounded p-2 max-h-32 overflow-y-auto nodrag nowheel">
+            <p className="text-[10px] text-white/80 whitespace-pre-wrap">{d.resultText}</p>
+          </div>
+        )}
+        {status === 'error' && <p className="text-[9px] text-red-400 text-center">{d.errorMessage || 'Erro'}</p>}
+      </div>
+      <Handle type="source" position={Position.Right} className="!bg-violet-400 !w-2 !h-2" />
+    </div>
+  )
+}
+
+function FieldSelect({ id, label, field, value, options }: { id: string; label: string; field: string; value?: string; options: { v: string; l: string }[] }) {
+  return (
+    <div className="flex items-center gap-2">
+      <p className="text-[9px] text-white/40 w-12 flex-shrink-0">{label}</p>
+      <select
+        value={value || ''}
+        onChange={e => window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { [field]: e.target.value } } }))}
+        className="nodrag flex-1 px-2 py-1 bg-surface-400 border border-white/10 rounded text-[10px] text-white focus:outline-none focus:border-violet-500"
+      >
+        {options.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+      </select>
+    </div>
   )
 }
 
 export const NODE_LIBRARY: { type: string; label: string; icon: typeof Package; color: string; defaults: Record<string, unknown>; group: 'input' | 'action' }[] = [
   // Inputs
   { type: 'product', label: 'Produto', icon: Package, color: 'text-orange-400', defaults: {}, group: 'input' },
-  { type: 'avatar', label: 'Influencer', icon: User, color: 'text-pink-400', defaults: {}, group: 'input' },
+  { type: 'avatar', label: 'Avatar', icon: User, color: 'text-pink-400', defaults: {}, group: 'input' },
   { type: 'scene', label: 'Cena', icon: ImageIcon, color: 'text-emerald-400', defaults: {}, group: 'input' },
   { type: 'settings', label: 'Ajustes', icon: Sliders, color: 'text-sky-400', defaults: { pose: 'front', style: 'casual', enhancements: ['skin', 'sharpness', 'anti_ai', 'hands'], format: '9:16' }, group: 'input' },
   { type: 'image', label: 'Imagem', icon: ImageIcon, color: 'text-cyan-400', defaults: {}, group: 'input' },
@@ -528,6 +887,7 @@ export const NODE_LIBRARY: { type: string; label: string; icon: typeof Package; 
   { type: 'edit-image', label: 'Editar Imagem', icon: Pencil, color: 'text-fuchsia-400', defaults: { status: 'idle' }, group: 'action' },
   { type: 'video', label: 'Gerar Vídeo', icon: Film, color: 'text-blue-400', defaults: { status: 'idle', mode: 'veo-lite' }, group: 'action' },
   { type: 'motion', label: 'Imitar Movimento', icon: Activity, color: 'text-rose-400', defaults: { status: 'idle' }, group: 'action' },
+  { type: 'script', label: 'Gerar Roteiro', icon: FileText, color: 'text-violet-400', defaults: { status: 'idle', estilo: 'ugc', idioma: 'pt-BR' }, group: 'action' },
 ]
 
 export { type LabNodeContext }

@@ -10,10 +10,9 @@ import { TOOL_CREDITS } from '../types/credits'
 
 const CREDITS = TOOL_CREDITS.avatar_creator
 
-// Path padrão pra imagens das variantes no Storage. Cliente sobe imagens reais em
-// public-media/booster-templates/avatar-creator/{category}/{variant}.jpg quando tiver assets.
-// Enquanto não tiver, o card renderiza placeholder com gradiente + emoji + label.
-const ASSET_BASE = 'https://mdueuksfunifyxfqpmdv.supabase.co/storage/v1/object/public/public-media/booster-templates/avatar-creator'
+// URLs Higgsfield CDN fornecidas pelo cliente em "ultimos ajustes boosters" (2026-04-28).
+// Cliente substitui no futuro se precisar customizar.
+const HIGGS = (path: string) => `https://higgsfield.ai/cdn-cgi/image/fit=scale-down,format=webp,onerror=redirect,width=1280,quality=85/https://cdn.higgsfield.ai/ai_influencer_option/${path}.webp`
 
 interface Variant {
   id: string
@@ -29,20 +28,18 @@ interface Category {
   variants: Variant[]
 }
 
-// Variantes pré-definidas por categoria — mesmo set do TikShop IA, espelhando o PDF do cliente.
 const CATEGORIES: Category[] = [
   {
     id: 'pele',
     label: 'Pele',
-    description: 'suavização, textura, iluminação',
+    description: 'condição, textura, pigmentação',
     variants: [
-      { id: 'vintage', label: 'Vintage', emoji: '🎞️', imageUrl: `${ASSET_BASE}/pele/vintage.jpg` },
-      { id: 'sexta', label: 'Fresh', emoji: '✨', imageUrl: `${ASSET_BASE}/pele/sexta.jpg` },
-      { id: 'atletico', label: 'Atlético', emoji: '💪', imageUrl: `${ASSET_BASE}/pele/atletico.jpg` },
-      { id: 'curvilineo', label: 'Curvilíneo', emoji: '🌸', imageUrl: `${ASSET_BASE}/pele/curvilineo.jpg` },
-      { id: 'magro', label: 'Magro', emoji: '🪶', imageUrl: `${ASSET_BASE}/pele/magro.jpg` },
-      { id: 'pigmentacao', label: 'Pigmentação', emoji: '🎨', imageUrl: `${ASSET_BASE}/pele/pigmentacao.jpg` },
-      { id: 'enrugada', label: 'Pele Enrugada', emoji: '👴', imageUrl: `${ASSET_BASE}/pele/enrugada.jpg` },
+      { id: 'vitiligo', label: 'Vitiligo', emoji: '🧬', imageUrl: HIGGS('bf0f7520-a41a-46b9-b41c-7dc030c22b8b') },
+      { id: 'sardas', label: 'Sardas', emoji: '✨', imageUrl: HIGGS('a657e9c1-02b6-4083-a058-5f78e56a77ac') },
+      { id: 'albinismo', label: 'Albinismo', emoji: '🤍', imageUrl: HIGGS('6069e93f-31ce-4840-8e48-c81daee56be0') },
+      { id: 'cicatrizes', label: 'Cicatrizes', emoji: '🩹', imageUrl: HIGGS('9d28dcde-2709-4fa8-8f61-8a76798b0e1f') },
+      { id: 'pigmentacao', label: 'Pigmentação', emoji: '🎨', imageUrl: HIGGS('a9e6b3c8-9ab5-4fe3-8b99-5c5fbfa9665c') },
+      { id: 'enrugada', label: 'Pele Enrugada', emoji: '👴', imageUrl: HIGGS('26f07d76-57a7-4975-b18b-80a5fa2137c5') },
     ],
   },
   {
@@ -50,12 +47,12 @@ const CATEGORIES: Category[] = [
     label: 'Corpo',
     description: 'proporção, definição, ajuste visual',
     variants: [
-      { id: 'magro', label: 'Magro', emoji: '🪶', imageUrl: `${ASSET_BASE}/corpo/magro.jpg` },
-      { id: 'atletico', label: 'Atlético', emoji: '🏃', imageUrl: `${ASSET_BASE}/corpo/atletico.jpg` },
-      { id: 'curvilineo', label: 'Curvilíneo', emoji: '🌸', imageUrl: `${ASSET_BASE}/corpo/curvilineo.jpg` },
-      { id: 'pesado', label: 'Pesado', emoji: '🐻', imageUrl: `${ASSET_BASE}/corpo/pesado.jpg` },
-      { id: 'musculoso', label: 'Musculoso', emoji: '💪', imageUrl: `${ASSET_BASE}/corpo/musculoso.jpg` },
-      { id: 'normal', label: 'Normal', emoji: '👤', imageUrl: `${ASSET_BASE}/corpo/normal.jpg` },
+      { id: 'magro', label: 'Magro', emoji: '🪶', imageUrl: HIGGS('dadf681a-d007-4ac7-96f0-cb14673687b5') },
+      { id: 'atletico', label: 'Atlético', emoji: '🏃', imageUrl: HIGGS('142ea702-6816-4933-8f42-4b65cade3a8c') },
+      { id: 'curvilineo', label: 'Curvilíneo', emoji: '🌸', imageUrl: HIGGS('2bb2fe58-8099-4d62-97f5-5742e564a31f') },
+      { id: 'pesado', label: 'Pesado', emoji: '🐻', imageUrl: HIGGS('c6198edf-f21d-4e3e-9ac5-d4a3333ceb6f') },
+      { id: 'muscular', label: 'Muscular', emoji: '💪', imageUrl: HIGGS('16b7cb85-e2b6-42ac-8d22-30edb28d8eb2') },
+      { id: 'normal', label: 'Normal', emoji: '👤', imageUrl: HIGGS('d077688b-6a9a-4cb5-9bfb-b62c06fc7f2b') },
     ],
   },
   {
@@ -63,12 +60,12 @@ const CATEGORIES: Category[] = [
     label: 'Cabelo',
     description: 'estilo, volume, acabamento',
     variants: [
-      { id: 'calvo', label: 'Calvo', emoji: '🥚', imageUrl: `${ASSET_BASE}/cabelo/calvo.jpg` },
-      { id: 'comprido', label: 'Comprido', emoji: '👱‍♀️', imageUrl: `${ASSET_BASE}/cabelo/comprido.jpg` },
-      { id: 'afro', label: 'Afro', emoji: '👨‍🦱', imageUrl: `${ASSET_BASE}/cabelo/afro.jpg` },
-      { id: 'curto', label: 'Curto', emoji: '👦', imageUrl: `${ASSET_BASE}/cabelo/curto.jpg` },
-      { id: 'punk', label: 'Punk', emoji: '🤘', imageUrl: `${ASSET_BASE}/cabelo/punk.jpg` },
-      { id: 'cacheado', label: 'Cacheado', emoji: '👩‍🦱', imageUrl: `${ASSET_BASE}/cabelo/cacheado.jpg` },
+      { id: 'calvo', label: 'Calvo', emoji: '🥚', imageUrl: HIGGS('ca8b2954-900c-424f-9fda-acc5c37d58dd') },
+      { id: 'comprido', label: 'Comprido', emoji: '👱‍♀️', imageUrl: HIGGS('9145dee8-7136-4ee9-a464-20268fed4a37') },
+      { id: 'afro', label: 'Afro', emoji: '👨‍🦱', imageUrl: HIGGS('7fc8fcc7-310f-406c-94c2-c4fc56568d40') },
+      { id: 'curto', label: 'Curto', emoji: '👦', imageUrl: HIGGS('383399be-fe36-4196-9b45-f328cf40eb1e') },
+      { id: 'punk', label: 'Punk', emoji: '🤘', imageUrl: HIGGS('a6555ba9-bd9b-4839-898d-3758e9788d18') },
+      { id: 'cacheado', label: 'Cacheado', emoji: '👩‍🦱', imageUrl: HIGGS('b3c8c28b-c19d-49bf-8223-42a5e3a66edb') },
     ],
   },
 ]

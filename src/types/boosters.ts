@@ -112,7 +112,8 @@ export const BOOSTERS: BoosterDef[] = [
     slug: 'pele-ultra',
     title: 'Pele Ultra Realista',
     description: 'Aprimore texturas da pele com realismo extremo',
-    videoUrl: 'https://cdn.higgsfield.ai/application_main/bb9d59e1-0493-4031-a97d-27fc7f660c89.mp4',
+    // TODO cliente: substituir por MP4 do TikTok @promptze/video/7619090714755878164 quando subir pro Storage
+    videoUrl: 'https://static.higgsfield.ai/explore/Edit-image-video-inpaint.mp4',
     credits: 4,
     tool: 'skin_enhancer',
     edgeFunction: 'skin-enhancer',
@@ -156,7 +157,8 @@ export const BOOSTERS: BoosterDef[] = [
     slug: 'sora-remover',
     title: 'Sora Remover',
     description: 'Remova a marca d\'água dos vídeos do Sora 2',
-    videoUrl: 'https://cdn.higgsfield.ai/application_main/bb9d59e1-0493-4031-a97d-27fc7f660c89.mp4',
+    // TODO cliente: substituir por MP4 freepik/robos-feitos-ia_3509385 quando subir pro Storage
+    videoUrl: 'https://static.higgsfield.ai/kling-3/kling-3.mp4',
     credits: 20,
     tool: 'sora_remover',
     edgeFunction: 'sora-watermark-remover',
@@ -187,7 +189,8 @@ export const BOOSTERS: BoosterDef[] = [
     slug: 'transcricao',
     title: 'Transcrição de Áudio',
     description: 'Transforme áudio em texto rapidamente',
-    videoUrl: 'https://cdn.higgsfield.ai/application_main/bb9d59e1-0493-4031-a97d-27fc7f660c89.mp4',
+    // TODO cliente: substituir por MP4 freepik/close-up-homem-digitar_2848081 quando subir pro Storage
+    videoUrl: 'https://static.higgsfield.ai/explore/soul-character.mp4',
     credits: 2,
     pricingHint: '2cr / minuto',
     tool: 'transcribe_audio',
