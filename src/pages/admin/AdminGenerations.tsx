@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Sparkles, Filter } from 'lucide-react'
+import { Sparkles, Filter, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { CreditUsageLog } from '../../types/database'
 import { TOOL_LABELS } from '../../types/credits'
@@ -8,12 +8,13 @@ export function AdminGenerations() {
   const [logs, setLogs] = useState<CreditUsageLog[]>([])
   const [loading, setLoading] = useState(true)
   const [toolFilter, setToolFilter] = useState('all')
+  const [emailSearch, setEmailSearch] = useState('')
 
   useEffect(() => { load() }, [toolFilter])
 
   async function load() {
     setLoading(true)
-    let q = supabase.from('credit_usage_log').select('*').order('created_at', { ascending: false }).limit(100)
+    let q = supabase.from('credit_usage_log').select('*').order('created_at', { ascending: false }).limit(200)
     if (toolFilter !== 'all') q = q.eq('tool_name', toolFilter)
     const { data } = await q
     setLogs(data ?? [])
@@ -21,9 +22,18 @@ export function AdminGenerations() {
   }
 
   const tools = ['all', ...Object.keys(TOOL_LABELS)]
+  const visibleLogs = emailSearch
+    ? logs.filter(l => l.user_email?.toLowerCase().includes(emailSearch.toLowerCase()))
+    : logs
 
   return (
     <div className="space-y-4">
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+        <input type="text" placeholder="Buscar por email do usuário..." value={emailSearch} onChange={e => setEmailSearch(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 bg-surface-300 border border-white/10 rounded-lg text-white placeholder:text-white/20 focus:outline-none focus:border-primary-500" />
+      </div>
+
       <div className="flex items-center gap-2 overflow-x-auto pb-2">
         <Filter size={14} className="text-white/40 shrink-0" />
         {tools.map(t => (
@@ -36,7 +46,7 @@ export function AdminGenerations() {
 
       {loading ? (
         <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-14 bg-surface-300 rounded-xl animate-pulse" />)}</div>
-      ) : logs.length === 0 ? (
+      ) : visibleLogs.length === 0 ? (
         <p className="text-center text-white/30 py-8">Nenhuma geração encontrada</p>
       ) : (
         <div className="bg-surface-300 border border-white/5 rounded-xl overflow-hidden">
@@ -51,7 +61,7 @@ export function AdminGenerations() {
               </tr>
             </thead>
             <tbody>
-              {logs.map(log => (
+              {visibleLogs.map(log => (
                 <tr key={log.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                   <td className="p-3 text-white/80 truncate max-w-[200px]">{log.user_email}</td>
                   <td className="p-3">

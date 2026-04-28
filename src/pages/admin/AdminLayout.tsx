@@ -1,10 +1,11 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, Coins, Sparkles, FileText, Zap, Gift, Settings, ArrowLeft, Activity, Package, Video, UserCircle } from 'lucide-react'
+import { LayoutDashboard, Users, Coins, Sparkles, FileText, Zap, Gift, Settings, ArrowLeft, Activity, Package, Video, UserCircle, CreditCard, Mail } from 'lucide-react'
 import { useAuthStore } from '../../stores/auth-store'
 
 const adminMenu = [
   { path: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { path: '/admin/users', label: 'Usuários', icon: Users },
+  { path: '/admin/pagamentos', label: 'Pagamentos', icon: CreditCard },
   { path: '/admin/credits', label: 'Créditos', icon: Coins },
   { path: '/admin/generations', label: 'Gerações', icon: Sparkles },
   { path: '/admin/viral-products', label: 'Produtos Virais', icon: Package },
@@ -13,6 +14,7 @@ const adminMenu = [
   { path: '/admin/templates', label: 'Templates', icon: FileText },
   { path: '/admin/boosters', label: 'Boosters', icon: Zap },
   { path: '/admin/referrals', label: 'Indicações', icon: Gift },
+  { path: '/admin/email', label: 'Email', icon: Mail },
   { path: '/admin/logs', label: 'Logs', icon: Activity },
   { path: '/admin/settings', label: 'Configurações', icon: Settings },
 ]

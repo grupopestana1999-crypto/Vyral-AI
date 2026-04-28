@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Key, Globe, Mail, CreditCard, Upload, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Key, Globe, Mail, CreditCard, Upload, Loader2, CheckCircle2, AlertTriangle, Coins, Save, DollarSign } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 
@@ -112,9 +112,129 @@ function MediaMigrationCard() {
   )
 }
 
+interface AppSetting { key: string; value: unknown }
+
+function PricingCard() {
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState<string | null>(null)
+  const [creditPrice, setCreditPrice] = useState('')
+  const [planCredits, setPlanCredits] = useState({ starter: '', creator: '', pro: '' })
+  const [planPrices, setPlanPrices] = useState({ starter: '', creator: '', pro: '' })
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase.from('app_settings').select('*')
+    const map: Record<string, unknown> = {}
+    ;(data ?? []).forEach((r: AppSetting) => { map[r.key] = r.value })
+    setCreditPrice(String(map.credit_brl_price ?? '0.05'))
+    const pc = (map.plan_credits ?? {}) as { starter?: number; creator?: number; pro?: number }
+    setPlanCredits({ starter: String(pc.starter ?? 250), creator: String(pc.creator ?? 750), pro: String(pc.pro ?? 2000) })
+    const pp = (map.plan_prices ?? {}) as { starter?: number; creator?: number; pro?: number }
+    setPlanPrices({ starter: String(pp.starter ?? 47), creator: String(pp.creator ?? 97), pro: String(pp.pro ?? 197) })
+    setLoading(false)
+  }
+
+  async function save(key: string, value: unknown) {
+    setSaving(key)
+    const { error } = await supabase.from('app_settings').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+    setSaving(null)
+    if (error) toast.error('Erro: ' + error.message)
+    else { toast.success('Salvo'); load() }
+  }
+
+  if (loading) return <div className="bg-surface-300 border border-white/5 rounded-xl p-6 h-40 animate-pulse" />
+
+  return (
+    <div className="bg-surface-300 border border-white/5 rounded-xl p-6 space-y-4">
+      <h3 className="text-sm font-semibold text-white flex items-center gap-2"><DollarSign size={16} className="text-primary-400" /> Preços e Créditos</h3>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-3 p-3 bg-surface-400 rounded-lg">
+          <Coins size={14} className="text-neon shrink-0" />
+          <div className="flex-1">
+            <p className="text-xs text-white/70">Valor do crédito avulso (R$)</p>
+            <p className="text-[10px] text-white/30">Usado pra calcular receita estimada no dashboard</p>
+          </div>
+          <input type="number" step="0.01" value={creditPrice} onChange={e => setCreditPrice(e.target.value)}
+            className="w-20 px-2 py-1 bg-surface-300 border border-white/10 rounded text-white text-sm text-right focus:outline-none focus:border-primary-500" />
+          <button onClick={() => save('credit_brl_price', Number(creditPrice))} disabled={saving === 'credit_brl_price'}
+            className="px-2 py-1 rounded bg-primary-600 text-white text-xs cursor-pointer disabled:opacity-50">
+            {saving === 'credit_brl_price' ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+          </button>
+        </div>
+
+        <div className="p-3 bg-surface-400 rounded-lg space-y-2">
+          <p className="text-xs text-white/70 mb-2">Créditos por plano</p>
+          {(['starter','creator','pro'] as const).map(p => (
+            <div key={p} className="flex items-center gap-2">
+              <span className="w-16 text-xs uppercase text-white/60">{p}</span>
+              <input type="number" value={planCredits[p]} onChange={e => setPlanCredits(prev => ({ ...prev, [p]: e.target.value }))}
+                className="flex-1 px-2 py-1 bg-surface-300 border border-white/10 rounded text-white text-sm focus:outline-none focus:border-primary-500" />
+              <span className="text-[10px] text-white/40">cr</span>
+            </div>
+          ))}
+          <button onClick={() => save('plan_credits', { starter: Number(planCredits.starter), creator: Number(planCredits.creator), pro: Number(planCredits.pro) })}
+            disabled={saving === 'plan_credits'}
+            className="w-full px-2 py-1.5 rounded bg-primary-600 text-white text-xs cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1">
+            {saving === 'plan_credits' ? <Loader2 size={12} className="animate-spin" /> : <><Save size={12} /> Salvar créditos por plano</>}
+          </button>
+        </div>
+
+        <div className="p-3 bg-surface-400 rounded-lg space-y-2">
+          <p className="text-xs text-white/70 mb-2">Preço dos planos (R$/mês)</p>
+          {(['starter','creator','pro'] as const).map(p => (
+            <div key={p} className="flex items-center gap-2">
+              <span className="w-16 text-xs uppercase text-white/60">{p}</span>
+              <input type="number" step="0.01" value={planPrices[p]} onChange={e => setPlanPrices(prev => ({ ...prev, [p]: e.target.value }))}
+                className="flex-1 px-2 py-1 bg-surface-300 border border-white/10 rounded text-white text-sm focus:outline-none focus:border-primary-500" />
+              <span className="text-[10px] text-white/40">R$</span>
+            </div>
+          ))}
+          <button onClick={() => save('plan_prices', { starter: Number(planPrices.starter), creator: Number(planPrices.creator), pro: Number(planPrices.pro) })}
+            disabled={saving === 'plan_prices'}
+            className="w-full px-2 py-1.5 rounded bg-primary-600 text-white text-xs cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1">
+            {saving === 'plan_prices' ? <Loader2 size={12} className="animate-spin" /> : <><Save size={12} /> Salvar preços</>}
+          </button>
+        </div>
+      </div>
+      <p className="text-[10px] text-white/30">Boosters por plano: todos planos têm acesso a todos boosters. A diferença é só a quantidade de créditos. Configure boosters individuais em <code className="text-primary-400">/admin/boosters</code>.</p>
+    </div>
+  )
+}
+
+function ApiHealthCard() {
+  const apis = [
+    { name: 'Kie AI', env: 'KIE_API_KEY', desc: 'Veo, Kling, Sora, Motion, Skin, Voice, Transcribe' },
+    { name: 'Gemini', env: 'GEMINI_API_KEY', desc: 'Gerador de prompts, Influencer Lab' },
+    { name: 'Resend', env: 'RESEND_API_KEY', desc: 'Emails transacionais (welcome, recovery)' },
+    { name: 'Hotmart', env: 'HOTMART_WEBHOOK_TOKEN', desc: 'Validação de webhook' },
+  ]
+  return (
+    <div className="bg-surface-300 border border-white/5 rounded-xl p-6 space-y-4">
+      <h3 className="text-sm font-semibold text-white flex items-center gap-2"><CheckCircle2 size={16} className="text-primary-400" /> Status das APIs</h3>
+      <div className="space-y-2">
+        {apis.map(a => (
+          <div key={a.env} className="flex items-center justify-between p-3 bg-surface-400 rounded-lg">
+            <div>
+              <p className="text-sm text-white">{a.name}</p>
+              <p className="text-[10px] text-white/30">{a.desc}</p>
+            </div>
+            <code className="text-[10px] text-white/30 font-mono">{a.env}</code>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-white/30">Configure as chaves no Supabase: Settings &gt; Edge Functions &gt; Secrets</p>
+    </div>
+  )
+}
+
 export function AdminSettings() {
   return (
     <div className="max-w-2xl space-y-6">
+      <PricingCard />
+      <ApiHealthCard />
       <MediaMigrationCard />
       <div className="bg-surface-300 border border-white/5 rounded-xl p-6 space-y-4">
         <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Key size={16} className="text-primary-400" /> Chaves de API</h3>

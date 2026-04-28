@@ -40,6 +40,8 @@ import { AdminSettings } from './pages/admin/AdminSettings'
 import { AdminViralProducts } from './pages/admin/AdminViralProducts'
 import { AdminViralVideos } from './pages/admin/AdminViralVideos'
 import { AdminViralCreators } from './pages/admin/AdminViralCreators'
+import { AdminPagamentos } from './pages/admin/AdminPagamentos'
+import { AdminEmail } from './pages/admin/AdminEmail'
 import { TermsPage } from './pages/TermsPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { PublicCheckoutPage } from './pages/PublicCheckoutPage'
@@ -108,8 +110,10 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
             <Route path="users" element={<AdminUsers />} />
+            <Route path="pagamentos" element={<AdminPagamentos />} />
             <Route path="credits" element={<AdminGenerations />} />
             <Route path="generations" element={<AdminGenerations />} />
+            <Route path="email" element={<AdminEmail />} />
             <Route path="viral-products" element={<AdminViralProducts />} />
             <Route path="viral-videos" element={<AdminViralVideos />} />
             <Route path="viral-creators" element={<AdminViralCreators />} />
