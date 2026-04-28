@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Loader2, Upload, Sparkles, Download, Image as ImageIcon, Sliders } from 'lucide-react'
+import { ArrowLeft, Loader2, Upload, Sparkles, Download, Image as ImageIcon, Sliders, CheckCircle2 } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
@@ -10,20 +10,39 @@ import { TOOL_CREDITS } from '../types/credits'
 
 const CREDITS = TOOL_CREDITS.avatar_creator
 
+// Path padrão pra imagens das variantes no Storage. Cliente sobe imagens reais em
+// public-media/booster-templates/avatar-creator/{category}/{variant}.jpg quando tiver assets.
+// Enquanto não tiver, o card renderiza placeholder com gradiente + emoji + label.
+const ASSET_BASE = 'https://mdueuksfunifyxfqpmdv.supabase.co/storage/v1/object/public/public-media/booster-templates/avatar-creator'
+
+interface Variant {
+  id: string
+  label: string
+  emoji: string
+  imageUrl?: string
+}
+
+interface Category {
+  id: 'pele' | 'corpo' | 'cabelo'
+  label: string
+  description: string
+  variants: Variant[]
+}
+
 // Variantes pré-definidas por categoria — mesmo set do TikShop IA, espelhando o PDF do cliente.
-const CATEGORIES = [
+const CATEGORIES: Category[] = [
   {
     id: 'pele',
     label: 'Pele',
     description: 'suavização, textura, iluminação',
     variants: [
-      { id: 'vintage', label: 'Vintage' },
-      { id: 'sexta', label: 'Fresh' },
-      { id: 'atletico', label: 'Atlético' },
-      { id: 'curvilineo', label: 'Curvilíneo' },
-      { id: 'magro', label: 'Magro' },
-      { id: 'pigmentacao', label: 'Pigmentação' },
-      { id: 'enrugada', label: 'Pele Enrugada' },
+      { id: 'vintage', label: 'Vintage', emoji: '🎞️', imageUrl: `${ASSET_BASE}/pele/vintage.jpg` },
+      { id: 'sexta', label: 'Fresh', emoji: '✨', imageUrl: `${ASSET_BASE}/pele/sexta.jpg` },
+      { id: 'atletico', label: 'Atlético', emoji: '💪', imageUrl: `${ASSET_BASE}/pele/atletico.jpg` },
+      { id: 'curvilineo', label: 'Curvilíneo', emoji: '🌸', imageUrl: `${ASSET_BASE}/pele/curvilineo.jpg` },
+      { id: 'magro', label: 'Magro', emoji: '🪶', imageUrl: `${ASSET_BASE}/pele/magro.jpg` },
+      { id: 'pigmentacao', label: 'Pigmentação', emoji: '🎨', imageUrl: `${ASSET_BASE}/pele/pigmentacao.jpg` },
+      { id: 'enrugada', label: 'Pele Enrugada', emoji: '👴', imageUrl: `${ASSET_BASE}/pele/enrugada.jpg` },
     ],
   },
   {
@@ -31,12 +50,12 @@ const CATEGORIES = [
     label: 'Corpo',
     description: 'proporção, definição, ajuste visual',
     variants: [
-      { id: 'magro', label: 'Magro' },
-      { id: 'atletico', label: 'Atlético' },
-      { id: 'curvilineo', label: 'Curvilíneo' },
-      { id: 'pesado', label: 'Pesado' },
-      { id: 'musculoso', label: 'Musculoso' },
-      { id: 'normal', label: 'Normal' },
+      { id: 'magro', label: 'Magro', emoji: '🪶', imageUrl: `${ASSET_BASE}/corpo/magro.jpg` },
+      { id: 'atletico', label: 'Atlético', emoji: '🏃', imageUrl: `${ASSET_BASE}/corpo/atletico.jpg` },
+      { id: 'curvilineo', label: 'Curvilíneo', emoji: '🌸', imageUrl: `${ASSET_BASE}/corpo/curvilineo.jpg` },
+      { id: 'pesado', label: 'Pesado', emoji: '🐻', imageUrl: `${ASSET_BASE}/corpo/pesado.jpg` },
+      { id: 'musculoso', label: 'Musculoso', emoji: '💪', imageUrl: `${ASSET_BASE}/corpo/musculoso.jpg` },
+      { id: 'normal', label: 'Normal', emoji: '👤', imageUrl: `${ASSET_BASE}/corpo/normal.jpg` },
     ],
   },
   {
@@ -44,15 +63,15 @@ const CATEGORIES = [
     label: 'Cabelo',
     description: 'estilo, volume, acabamento',
     variants: [
-      { id: 'calvo', label: 'Calvo' },
-      { id: 'comprido', label: 'Comprido' },
-      { id: 'afro', label: 'Afro' },
-      { id: 'curto', label: 'Curto' },
-      { id: 'punk', label: 'Punk' },
-      { id: 'cacheado', label: 'Cacheado' },
+      { id: 'calvo', label: 'Calvo', emoji: '🥚', imageUrl: `${ASSET_BASE}/cabelo/calvo.jpg` },
+      { id: 'comprido', label: 'Comprido', emoji: '👱‍♀️', imageUrl: `${ASSET_BASE}/cabelo/comprido.jpg` },
+      { id: 'afro', label: 'Afro', emoji: '👨‍🦱', imageUrl: `${ASSET_BASE}/cabelo/afro.jpg` },
+      { id: 'curto', label: 'Curto', emoji: '👦', imageUrl: `${ASSET_BASE}/cabelo/curto.jpg` },
+      { id: 'punk', label: 'Punk', emoji: '🤘', imageUrl: `${ASSET_BASE}/cabelo/punk.jpg` },
+      { id: 'cacheado', label: 'Cacheado', emoji: '👩‍🦱', imageUrl: `${ASSET_BASE}/cabelo/cacheado.jpg` },
     ],
   },
-] as const
+]
 
 type CategoryId = typeof CATEGORIES[number]['id']
 
@@ -197,13 +216,12 @@ export function AvatarCreatorPage() {
             <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Variante *</p>
             <div className="grid grid-cols-3 gap-2">
               {currentVariants.map(v => (
-                <button
+                <VariantCard
                   key={v.id}
+                  variant={v}
+                  selected={variant === v.id}
                   onClick={() => setVariant(v.id)}
-                  className={`py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${variant === v.id ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/50 hover:text-white'}`}
-                >
-                  {v.label}
-                </button>
+                />
               ))}
             </div>
           </div>
@@ -253,5 +271,45 @@ export function AvatarCreatorPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+function VariantCard({ variant, selected, onClick }: { variant: Variant; selected: boolean; onClick: () => void }) {
+  // Quando imageUrl carrega com sucesso, esconde o placeholder. Senão (404 ou pendente)
+  // exibe gradient + emoji + label centralizado.
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [imageFailed, setImageFailed] = useState(false)
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all cursor-pointer group ${
+        selected ? 'border-primary-500 ring-2 ring-primary-500/40' : 'border-white/10 hover:border-white/30'
+      }`}
+    >
+      {variant.imageUrl && !imageFailed && (
+        <img
+          src={variant.imageUrl}
+          alt={variant.label}
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={() => setImageLoaded(true)}
+          onError={() => setImageFailed(true)}
+        />
+      )}
+      {(!variant.imageUrl || imageFailed || !imageLoaded) && (
+        <div className="absolute inset-0 bg-gradient-to-br from-primary-900/40 via-surface-400 to-accent-900/40 flex flex-col items-center justify-center gap-1">
+          <span className="text-2xl">{variant.emoji}</span>
+        </div>
+      )}
+      <div className="absolute inset-x-0 bottom-0 px-1.5 py-1.5 bg-gradient-to-t from-black/80 to-transparent">
+        <p className="text-[11px] font-semibold text-white text-center truncate">{variant.label}</p>
+      </div>
+      {selected && (
+        <div className="absolute top-1.5 right-1.5 bg-primary-500 rounded-full p-0.5">
+          <CheckCircle2 size={12} className="text-white" />
+        </div>
+      )}
+    </button>
   )
 }
