@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, CreditCard, Send, Loader2, ExternalLink } from 'lucide-react'
+import { Search, CreditCard, Send, Loader2, ExternalLink, Gift } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 
@@ -13,6 +13,8 @@ interface SubRow {
   credits_remaining: number
   hotmart_transaction_id: string | null
   stripe_session_id: string | null
+  purchase_price_brl: number | null
+  is_courtesy: boolean
   created_at: string
   expires_at: string | null
 }
@@ -25,12 +27,11 @@ const STATUS_COLOR: Record<string, string> = {
   refunded: 'bg-red-500/20 text-red-400',
 }
 
-const PLAN_PRICE: Record<string, number> = { starter: 47, creator: 97, pro: 197 }
-
 export function AdminPagamentos() {
   const [rows, setRows] = useState<SubRow[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [originFilter, setOriginFilter] = useState<'all' | 'hotmart' | 'stripe' | 'courtesy'>('all')
   const [loading, setLoading] = useState(true)
   const [resending, setResending] = useState<string | null>(null)
 
@@ -55,15 +56,36 @@ export function AdminPagamentos() {
   }
 
   const filtered = rows.filter(r => {
-    const matchSearch = r.customer_email?.toLowerCase().includes(search.toLowerCase()) || r.hotmart_transaction_id?.includes(search)
+    const matchSearch = r.customer_email?.toLowerCase().includes(search.toLowerCase()) || r.hotmart_transaction_id?.includes(search) || r.stripe_session_id?.includes(search)
     const matchStatus = statusFilter === 'all' || r.status === statusFilter
-    return matchSearch && matchStatus
+    const origin = r.is_courtesy ? 'courtesy' : r.hotmart_transaction_id ? 'hotmart' : r.stripe_session_id ? 'stripe' : 'courtesy'
+    const matchOrigin = originFilter === 'all' || origin === originFilter
+    return matchSearch && matchStatus && matchOrigin
   })
 
   const statuses = ['all', 'active', 'approved', 'expired', 'cancelled']
 
+  // Totais visíveis
+  const totalRevenue = filtered.reduce((sum, r) => sum + (r.purchase_price_brl || 0), 0)
+  const courtesyCount = filtered.filter(r => r.is_courtesy).length
+
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="bg-surface-300 border border-white/5 rounded-xl p-3">
+          <p className="text-[10px] text-white/40 uppercase">Total visível</p>
+          <p className="text-lg font-bold text-white">{filtered.length}</p>
+        </div>
+        <div className="bg-surface-300 border border-white/5 rounded-xl p-3">
+          <p className="text-[10px] text-white/40 uppercase">Receita visível</p>
+          <p className="text-lg font-bold text-neon">R$ {totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+        </div>
+        <div className="bg-surface-300 border border-white/5 rounded-xl p-3">
+          <p className="text-[10px] text-white/40 uppercase">Cortesias</p>
+          <p className="text-lg font-bold text-yellow-400">{courtesyCount}</p>
+        </div>
+      </div>
+
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[240px]">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
@@ -74,26 +96,31 @@ export function AdminPagamentos() {
           className="px-3 py-2.5 bg-surface-300 border border-white/10 rounded-lg text-white text-sm focus:outline-none">
           {statuses.map(s => <option key={s} value={s}>{s === 'all' ? 'Todos status' : s}</option>)}
         </select>
+        <select value={originFilter} onChange={e => setOriginFilter(e.target.value as 'all' | 'hotmart' | 'stripe' | 'courtesy')}
+          className="px-3 py-2.5 bg-surface-300 border border-white/10 rounded-lg text-white text-sm focus:outline-none">
+          <option value="all">Todas origens</option>
+          <option value="hotmart">Hotmart</option>
+          <option value="stripe">Stripe</option>
+          <option value="courtesy">Cortesia</option>
+        </select>
         <button onClick={load} disabled={loading} className="px-3 py-2.5 rounded-lg bg-surface-300 border border-white/10 text-white/60 hover:text-white text-sm cursor-pointer disabled:opacity-50">
           {loading ? <Loader2 size={14} className="animate-spin" /> : 'Atualizar'}
         </button>
       </div>
-
-      <p className="text-xs text-white/40">{filtered.length} {filtered.length === 1 ? 'pagamento' : 'pagamentos'}</p>
 
       {loading ? (
         <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-16 bg-surface-300 rounded-xl animate-pulse" />)}</div>
       ) : filtered.length === 0 ? (
         <p className="text-center text-white/30 py-8">Nenhum pagamento encontrado</p>
       ) : (
-        <div className="bg-surface-300 border border-white/5 rounded-xl overflow-hidden">
+        <div className="bg-surface-300 border border-white/5 rounded-xl overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/5 text-white/40 text-xs">
                 <th className="text-left p-3 font-medium">Email</th>
                 <th className="text-left p-3 font-medium">Plano</th>
                 <th className="text-left p-3 font-medium">Status</th>
-                <th className="text-right p-3 font-medium">Valor</th>
+                <th className="text-right p-3 font-medium">Valor pago</th>
                 <th className="text-left p-3 font-medium">Origem / TX ID</th>
                 <th className="text-right p-3 font-medium">Data</th>
                 <th className="text-center p-3 font-medium">Ações</th>
@@ -102,19 +129,36 @@ export function AdminPagamentos() {
             <tbody>
               {filtered.map(r => {
                 const isHotmart = !!r.hotmart_transaction_id
+                const isStripe = !!r.stripe_session_id
                 const txId = r.hotmart_transaction_id ?? r.stripe_session_id
-                const valor = r.plan_type ? PLAN_PRICE[r.plan_type] ?? 0 : 0
+                const valor = r.is_courtesy ? null : r.purchase_price_brl
                 return (
                   <tr key={r.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                     <td className="p-3 text-white/80 truncate max-w-[200px]">{r.customer_email}</td>
                     <td className="p-3"><span className="capitalize text-primary-300">{r.plan_type ?? '—'}</span></td>
                     <td className="p-3"><span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${STATUS_COLOR[r.status] ?? 'bg-gray-500/20 text-gray-400'}`}>{r.status}</span></td>
-                    <td className="p-3 text-right text-neon font-semibold">R$ {valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                    <td className="p-3 text-right font-semibold">
+                      {r.is_courtesy ? (
+                        <span className="text-yellow-400">Cortesia</span>
+                      ) : valor != null ? (
+                        <span className="text-neon">R$ {valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      ) : (
+                        <span className="text-white/30">—</span>
+                      )}
+                    </td>
                     <td className="p-3 text-xs">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${isHotmart ? 'bg-orange-500/20 text-orange-400' : 'bg-purple-500/20 text-purple-400'}`}>
-                        <CreditCard size={10} />{isHotmart ? 'Hotmart' : 'Stripe'}
-                      </span>
-                      <span className="font-mono text-white/30 ml-2">{txId ? txId.slice(0, 16) + '…' : '—'}</span>
+                      {r.is_courtesy ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-yellow-500/20 text-yellow-400">
+                          <Gift size={10} />Cortesia Admin
+                        </span>
+                      ) : (
+                        <>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${isHotmart ? 'bg-orange-500/20 text-orange-400' : isStripe ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                            <CreditCard size={10} />{isHotmart ? 'Hotmart' : isStripe ? 'Stripe' : '—'}
+                          </span>
+                          {txId && <span className="font-mono text-white/30 ml-2">{txId.slice(0, 16) + '…'}</span>}
+                        </>
+                      )}
                     </td>
                     <td className="p-3 text-right text-white/50 text-xs whitespace-nowrap">{new Date(r.created_at).toLocaleString('pt-BR')}</td>
                     <td className="p-3 text-center">
@@ -133,7 +177,7 @@ export function AdminPagamentos() {
 
       <div className="flex items-start gap-2 text-xs text-white/40 bg-surface-300/50 border border-white/5 rounded-lg p-3">
         <ExternalLink size={12} className="mt-0.5 shrink-0" />
-        <span>Webhook Hotmart configurado em <code className="text-primary-400">/functions/v1/hotmart-webhook</code>. Compras aprovadas criam conta automaticamente + enviam email com magic link (1 hora de validade).</span>
+        <span>Webhook Hotmart configurado em <code className="text-primary-400">/functions/v1/hotmart-webhook</code>. Compras aprovadas criam conta automaticamente + enviam email com magic link. <strong>Cortesias</strong> são contas criadas pelo admin (sem pagamento real).</span>
       </div>
     </div>
   )

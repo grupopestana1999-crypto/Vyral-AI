@@ -112,7 +112,6 @@ export default function App() {
             <Route path="users" element={<AdminUsers />} />
             <Route path="pagamentos" element={<AdminPagamentos />} />
             <Route path="credits" element={<AdminGenerations />} />
-            <Route path="generations" element={<AdminGenerations />} />
             <Route path="email" element={<AdminEmail />} />
             <Route path="viral-products" element={<AdminViralProducts />} />
             <Route path="viral-videos" element={<AdminViralVideos />} />

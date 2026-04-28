@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Coins, ChevronRight, Ban, ShieldCheck, Mail, History, Crown, X, Loader2 } from 'lucide-react'
+import { Search, Coins, ChevronRight, Ban, ShieldCheck, Mail, History, Crown, X, Loader2, UserPlus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 
@@ -38,6 +38,9 @@ export function AdminUsers() {
   const [history, setHistory] = useState<HistoryRow[] | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createForm, setCreateForm] = useState({ email: '', plan_type: 'starter' as 'starter' | 'creator' | 'pro', credits: 0, send_welcome: true })
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -113,6 +116,24 @@ export function AdminUsers() {
     setHistory(null)
   }
 
+  async function createUser() {
+    if (!createForm.email.includes('@')) { toast.error('Email inválido'); return }
+    if (createForm.credits < 0) { toast.error('Créditos não pode ser negativo'); return }
+    setCreating(true)
+    const { data, error } = await supabase.functions.invoke('admin-update-user', {
+      body: { action: 'create_user', payload: createForm },
+    })
+    setCreating(false)
+    if (error || (data as { error?: string })?.error) {
+      toast.error('Erro ao criar usuário: ' + (error?.message ?? (data as { error?: string })?.error ?? 'desconhecido'))
+      return
+    }
+    toast.success(`Usuário ${createForm.email} criado com ${createForm.credits} créditos`)
+    setCreateOpen(false)
+    setCreateForm({ email: '', plan_type: 'starter', credits: 0, send_welcome: true })
+    load()
+  }
+
   const filtered = users.filter(u => u.email?.toLowerCase().includes(search.toLowerCase()) || u.id.includes(search))
 
   return (
@@ -123,10 +144,61 @@ export function AdminUsers() {
           <input type="text" placeholder="Buscar por email ou ID..." value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-surface-300 border border-white/10 rounded-lg text-white placeholder:text-white/20 focus:outline-none focus:border-primary-500" />
         </div>
+        <button onClick={() => setCreateOpen(true)} className="px-3 py-2.5 rounded-lg bg-primary-600 text-white text-sm font-medium cursor-pointer hover:brightness-110 flex items-center gap-1.5">
+          <UserPlus size={14} /> Criar usuário
+        </button>
         <button onClick={load} disabled={loading} className="px-3 py-2.5 rounded-lg bg-surface-300 border border-white/10 text-white/60 hover:text-white text-sm cursor-pointer disabled:opacity-50">
           {loading ? <Loader2 size={14} className="animate-spin" /> : 'Atualizar'}
         </button>
       </div>
+
+      {createOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => !creating && setCreateOpen(false)}>
+          <div className="bg-surface-300 border border-white/10 rounded-xl p-6 max-w-md w-full space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2"><UserPlus size={18} className="text-primary-400" /> Criar novo usuário</h3>
+              <button onClick={() => !creating && setCreateOpen(false)} className="text-white/40 hover:text-white cursor-pointer"><X size={16} /></button>
+            </div>
+            <p className="text-xs text-white/50">Cria conta + subscription cortesia. Se ativado, envia email com magic link de primeiro acesso.</p>
+
+            <div className="space-y-3">
+              <label className="block">
+                <span className="text-xs text-white/60">Email</span>
+                <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })}
+                  placeholder="cliente@exemplo.com" autoFocus
+                  className="mt-1 w-full px-3 py-2 bg-surface-400 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500" />
+              </label>
+              <label className="block">
+                <span className="text-xs text-white/60">Plano</span>
+                <select value={createForm.plan_type} onChange={e => setCreateForm({ ...createForm, plan_type: e.target.value as 'starter' | 'creator' | 'pro' })}
+                  className="mt-1 w-full px-3 py-2 bg-surface-400 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500">
+                  <option value="starter">STARTER</option>
+                  <option value="creator">CREATOR</option>
+                  <option value="pro">PRO</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs text-white/60">Créditos iniciais</span>
+                <input type="number" value={createForm.credits} onChange={e => setCreateForm({ ...createForm, credits: Number(e.target.value) })}
+                  min={0} className="mt-1 w-full px-3 py-2 bg-surface-400 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500" />
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={createForm.send_welcome} onChange={e => setCreateForm({ ...createForm, send_welcome: e.target.checked })} />
+                <span className="text-xs text-white/70">Enviar email de boas-vindas com magic link</span>
+              </label>
+            </div>
+
+            <div className="flex gap-2">
+              <button onClick={() => setCreateOpen(false)} disabled={creating}
+                className="flex-1 px-4 py-2 rounded-lg bg-surface-400 text-white/70 hover:text-white text-sm cursor-pointer disabled:opacity-50">Cancelar</button>
+              <button onClick={createUser} disabled={creating || !createForm.email}
+                className="flex-1 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium cursor-pointer hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-1.5">
+                {creating ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />} Criar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <p className="text-xs text-white/40">{filtered.length} {filtered.length === 1 ? 'usuário' : 'usuários'} {search && `(filtrado de ${users.length})`}</p>
 
