@@ -34,7 +34,7 @@ export interface BoosterInput {
 // 11 boosters na ordem definida pelo cliente em PDF "Pontuações Finais Vyral AI" (2026-04-27).
 // Removidos: Gerador de Prompt standalone, Nano Banana 2, Human Engine.
 export const BOOSTERS: BoosterDef[] = [
-  // 01
+  // 01 - Creator+
   {
     id: 'influencer-lab',
     slug: 'influencer-lab',
@@ -43,11 +43,12 @@ export const BOOSTERS: BoosterDef[] = [
     videoUrl: 'https://static.higgsfield.ai/explore/soul-character.mp4',
     credits: 2,
     tool: 'influencer_lab',
+    minPlan: 'creator',
     inputs: [],
     resultType: 'image',
     isFree: false,
   },
-  // 02
+  // 02 - Starter+
   {
     id: 'image-edit',
     slug: 'edit-image',
@@ -57,10 +58,11 @@ export const BOOSTERS: BoosterDef[] = [
     credits: 2,
     tool: 'edit_image',
     edgeFunction: 'edit-image-inpaint',
+    minPlan: 'starter',
     inputs: [],
     resultType: 'image',
   },
-  // 03
+  // 03 - Pro
   {
     id: 'avatar-video',
     slug: 'avatar-video',
@@ -71,10 +73,11 @@ export const BOOSTERS: BoosterDef[] = [
     pricingHint: 'Lite 15cr / Fast 30cr',
     tool: 'veo_video',
     edgeFunction: 'generate-veo-video',
+    minPlan: 'pro',
     inputs: [],
     resultType: 'queued',
   },
-  // 04
+  // 04 - Creator+
   {
     id: 'avatar-creator',
     slug: 'avatar-creator',
@@ -83,13 +86,12 @@ export const BOOSTERS: BoosterDef[] = [
     videoUrl: 'https://cdn.higgsfield.ai/application_main/bb9d59e1-0493-4031-a97d-27fc7f660c89.mp4',
     credits: 2,
     tool: 'avatar_creator',
-    edgeFunction: 'generate-influencer-image',
+    edgeFunction: 'avatar-creator',
+    minPlan: 'creator',
     inputs: [],
     resultType: 'image',
-    locked: true,
-    emptyStateText: 'Em polimento final — chega em E2.',
   },
-  // 05
+  // 05 - Pro
   {
     id: 'motion-control',
     slug: 'motion',
@@ -100,10 +102,11 @@ export const BOOSTERS: BoosterDef[] = [
     pricingHint: '6cr/s 720p · 9cr/s 1080p',
     tool: 'motion_control',
     edgeFunction: 'generate-motion-video',
+    minPlan: 'pro',
     inputs: [],
     resultType: 'queued',
   },
-  // 06
+  // 06 - Creator+
   {
     id: 'skin-enhancer',
     slug: 'pele-ultra',
@@ -112,13 +115,12 @@ export const BOOSTERS: BoosterDef[] = [
     videoUrl: 'https://cdn.higgsfield.ai/application_main/bb9d59e1-0493-4031-a97d-27fc7f660c89.mp4',
     credits: 4,
     tool: 'skin_enhancer',
-    edgeFunction: 'generate-nano-banana-2',
+    edgeFunction: 'skin-enhancer',
+    minPlan: 'creator',
     inputs: [],
     resultType: 'image',
-    locked: true,
-    emptyStateText: 'Em polimento final — chega em E2.',
   },
-  // 07
+  // 07 - Starter+
   {
     id: 'videos-ia',
     slug: 'videos-ia',
@@ -129,10 +131,11 @@ export const BOOSTERS: BoosterDef[] = [
     pricingHint: '2cr/s',
     tool: 'grok_video',
     edgeFunction: 'generate-grok-video',
+    minPlan: 'starter',
     inputs: [],
     resultType: 'queued',
   },
-  // 08
+  // 08 - Pro
   {
     id: 'filmes-ia',
     slug: 'filmes-ia',
@@ -143,10 +146,11 @@ export const BOOSTERS: BoosterDef[] = [
     pricingHint: '7cr/s sem áudio · 10cr/s com áudio',
     tool: 'kling_3',
     edgeFunction: 'generate-kling3-video',
+    minPlan: 'pro',
     inputs: [],
     resultType: 'queued',
   },
-  // 09
+  // 09 - Starter+
   {
     id: 'sora-remover',
     slug: 'sora-remover',
@@ -156,12 +160,11 @@ export const BOOSTERS: BoosterDef[] = [
     credits: 20,
     tool: 'sora_remover',
     edgeFunction: 'sora-watermark-remover',
+    minPlan: 'starter',
     inputs: [],
     resultType: 'video',
-    locked: true,
-    emptyStateText: 'Em polimento final — chega em E2.',
   },
-  // 10
+  // 10 - Pro (chega em E3)
   {
     id: 'voice-clone',
     slug: 'clonagem-voz',
@@ -172,12 +175,13 @@ export const BOOSTERS: BoosterDef[] = [
     pricingHint: '5cr / 1000 chars',
     tool: 'voice_clone',
     edgeFunction: 'text-to-speech',
+    minPlan: 'pro',
     inputs: [],
     resultType: 'audio',
     locked: true,
     emptyStateText: 'Em desenvolvimento — chega em E3.',
   },
-  // 11
+  // 11 - Starter+ (chega em E3)
   {
     id: 'transcribe-audio',
     slug: 'transcricao',
@@ -188,6 +192,7 @@ export const BOOSTERS: BoosterDef[] = [
     pricingHint: '2cr / minuto',
     tool: 'transcribe_audio',
     edgeFunction: 'transcribe-audio',
+    minPlan: 'starter',
     inputs: [],
     resultType: 'text',
     locked: true,
