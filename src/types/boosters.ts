@@ -164,7 +164,7 @@ export const BOOSTERS: BoosterDef[] = [
     inputs: [],
     resultType: 'video',
   },
-  // 10 - Pro (chega em E3)
+  // 10 - Pro
   {
     id: 'voice-clone',
     slug: 'clonagem-voz',
@@ -178,10 +178,8 @@ export const BOOSTERS: BoosterDef[] = [
     minPlan: 'pro',
     inputs: [],
     resultType: 'audio',
-    locked: true,
-    emptyStateText: 'Em desenvolvimento — chega em E3.',
   },
-  // 11 - Starter+ (chega em E3)
+  // 11 - Starter+
   {
     id: 'transcribe-audio',
     slug: 'transcricao',
@@ -195,8 +193,6 @@ export const BOOSTERS: BoosterDef[] = [
     minPlan: 'starter',
     inputs: [],
     resultType: 'text',
-    locked: true,
-    emptyStateText: 'Em desenvolvimento — chega em E3.',
   },
 ]
 
