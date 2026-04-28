@@ -42,7 +42,12 @@ export function ImitarMovimentoPage() {
 
   const [tab, setTab] = useState<Tab>('criar')
   const [characterImage, setCharacterImage] = useState<string>('')
+  // referenceVideo: pra preview local. Pode ser blob URL (upload local) ou URL HTTP (template).
   const [referenceVideo, setReferenceVideo] = useState<string>('')
+  // videoFile: arquivo cru pra upload no Storage no momento do generate. Edge functions do Supabase
+  // têm limite ~6MB pra body JSON, então não dá pra mandar data URL grande direto. Upload primeiro
+  // e manda URL pública pro reference_video_url da edge fn.
+  const [videoFile, setVideoFile] = useState<File | null>(null)
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
   const [quality, setQuality] = useState<Quality>('720p')
@@ -79,6 +84,7 @@ export function ImitarMovimentoPage() {
 
   function handleSelectTemplate(t: MotionTemplate) {
     setReferenceVideo(t.video_url)
+    setVideoFile(null) // template já tem URL pública, não precisa upload
     setSelectedTemplateId(t.id)
     if (t.duration_s) setDuration(Math.min(MAX_DURATION, Math.max(MIN_DURATION, t.duration_s)))
   }
@@ -98,22 +104,21 @@ export function ImitarMovimentoPage() {
     } finally { e.target.value = '' }
   }
 
-  async function handleVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 30 * 1024 * 1024) { toast.error('Vídeo muito grande (max 30MB)'); return }
-    try {
-      const data = await blobToDataUrl(file)
-      setReferenceVideo(data)
-      setSelectedTemplateId(null) // upload manual desmarca template selecionado
-    } catch (err) {
-      toast.error('Erro: ' + (err as Error).message)
-    } finally { e.target.value = '' }
+    if (file.size > 30 * 1024 * 1024) { toast.error('Vídeo muito grande (max 30MB)'); e.target.value = ''; return }
+    if (referenceVideo && referenceVideo.startsWith('blob:')) URL.revokeObjectURL(referenceVideo)
+    const previewUrl = URL.createObjectURL(file)
+    setReferenceVideo(previewUrl)
+    setVideoFile(file)
+    setSelectedTemplateId(null) // upload manual desmarca template
+    e.target.value = ''
   }
 
   async function handleGenerate() {
     if (!characterImage) { toast.error('Suba a imagem do personagem'); return }
-    if (!referenceVideo) { toast.error('Suba o vídeo de referência (movimento/dança)'); return }
+    if (!referenceVideo && !videoFile) { toast.error('Selecione um template ou suba um vídeo de referência'); return }
     if (insufficient) { toast.error(`Créditos insuficientes (precisa ${cost})`); return }
 
     setGenerating(true)
@@ -122,12 +127,28 @@ export function ImitarMovimentoPage() {
       const token = session?.access_token
       if (!token) throw new Error('sessão expirada')
 
+      // Resolve a URL HTTP que vai pra edge fn. Template já tem URL HTTP. Upload local
+      // precisa subir pro Storage primeiro (Edge Functions têm limite ~6MB de body JSON).
+      let videoUrlForEdge: string
+      if (videoFile) {
+        const ext = videoFile.name.split('.').pop()?.toLowerCase() || 'mp4'
+        const filename = `motion-uploads/${session.user.id}/${Date.now()}.${ext}`
+        const { error: upErr } = await supabase.storage.from('public-media').upload(filename, videoFile, { contentType: videoFile.type, upsert: false })
+        if (upErr) throw new Error('Falha ao subir vídeo: ' + upErr.message)
+        const { data: pub } = supabase.storage.from('public-media').getPublicUrl(filename)
+        if (!pub?.publicUrl) throw new Error('Não consegui gerar URL pública do upload')
+        videoUrlForEdge = pub.publicUrl
+      } else {
+        // Veio de template — referenceVideo já é URL HTTP pública
+        videoUrlForEdge = referenceVideo
+      }
+
       const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/generate-motion-video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
         body: JSON.stringify({
           image_url: characterImage,
-          reference_video_url: referenceVideo,
+          reference_video_url: videoUrlForEdge,
           motion_prompt: prompt,
           quality,
           duration_s: duration,
@@ -264,15 +285,6 @@ export function ImitarMovimentoPage() {
       )}
     </div>
   )
-}
-
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(r.result as string)
-    r.onerror = () => reject(r.error)
-    r.readAsDataURL(blob)
-  })
 }
 
 function UploadSlot({ label, value, onPick, icon, mediaType, required, selectedFromTemplate }: { label: string; value: string; onPick: (e: React.ChangeEvent<HTMLInputElement>) => void; icon: React.ReactNode; mediaType: 'image' | 'video'; required?: boolean; selectedFromTemplate?: boolean }) {
