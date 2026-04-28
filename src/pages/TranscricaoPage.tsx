@@ -160,14 +160,21 @@ export function TranscricaoPage() {
           </div>
         )}
 
+        {mode === 'upload' && audioFile && duration > 0 && (
+          <CostBreakdown duration={duration} cost={cost} credits={credits} />
+        )}
+
+        {mode === 'url' && audioUrl.trim() && (
+          <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-200/80">
+            <p className="font-semibold mb-1">Custo via URL</p>
+            <p className="text-amber-100/60">Pra URLs externas a duração só é detectada no servidor. Cobra mínimo 2 cr/minuto, arredondado pra cima — saldo cai exato após processar.</p>
+          </div>
+        )}
+
         <button onClick={handleTranscribe} disabled={transcribing || insufficient || (mode === 'upload' ? !audioFile : !audioUrl.trim())} className="w-full py-3 rounded-xl bg-neon text-surface-500 font-bold text-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer">
           {transcribing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-          {transcribing ? 'Transcrevendo…' : `Transcrever — ~${cost} cr`}
+          {transcribing ? 'Transcrevendo…' : (mode === 'upload' && duration > 0 ? `Transcrever — ${cost} cr` : `Transcrever — ~${cost} cr`)}
         </button>
-
-        <p className="text-[11px] text-white/40 text-center">
-          Saldo: <span className="text-neon font-semibold">{credits}</span> · Custo final é arredondado por minuto inteiro
-        </p>
 
         {error && <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-xs text-red-300">{error}</div>}
       </div>
@@ -188,6 +195,43 @@ export function TranscricaoPage() {
             </button>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+function CostBreakdown({ duration, cost, credits }: { duration: number; cost: number; credits: number }) {
+  const minutes = Math.floor(duration / 60)
+  const seconds = Math.round(duration % 60)
+  const billedMinutes = Math.max(1, Math.ceil(duration / 60))
+  const balanceAfter = credits - cost
+  const insufficient = balanceAfter < 0
+
+  return (
+    <div className="bg-gradient-to-r from-primary-600/10 to-accent-600/10 border border-primary-500/30 rounded-xl p-4 space-y-3">
+      <p className="text-xs text-white/50 uppercase tracking-wide">Custo da transcrição</p>
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <p className="text-[10px] text-white/40 uppercase">Duração</p>
+          <p className="text-sm font-bold text-white mt-0.5">{minutes > 0 ? `${minutes} min ${seconds}s` : `${seconds}s`}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-white/40 uppercase">Cobrança</p>
+          <p className="text-sm font-bold text-white mt-0.5">{billedMinutes} min × 2 cr</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-white/40 uppercase">Total</p>
+          <p className="text-sm font-bold text-neon mt-0.5">{cost} cr</p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[11px]">
+        <span className="text-white/50">Saldo atual</span>
+        <span className="text-white font-semibold">
+          {credits} cr → <span className={insufficient ? 'text-red-400' : 'text-neon'}>{balanceAfter} cr</span>
+        </span>
+      </div>
+      {insufficient && (
+        <p className="text-[11px] text-red-300 font-medium">⚠ Saldo insuficiente. Recarregue créditos pra continuar.</p>
       )}
     </div>
   )

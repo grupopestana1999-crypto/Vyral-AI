@@ -18,7 +18,7 @@ type AvatarTab = 'galeria' | 'upload'
 
 export function AvatarVideosPage() {
   const navigate = useNavigate()
-  const { subscription } = useAuthStore()
+  const { subscription, user } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
 
   const [tab, setTab] = useState<Tab>('criar')
@@ -33,7 +33,11 @@ export function AvatarVideosPage() {
   const cost = calcCredits('veo_video', { veo_mode: mode })
   const insufficient = credits < cost
 
+  // Re-roda quando user.email vira disponível: auth-store inicializa async,
+  // então no primeiro mount o JWT ainda não foi setado no client Supabase →
+  // RLS de `avatars` retorna vazio. Depender de user?.email resolve isso.
   useEffect(() => {
+    if (!user?.email) return
     let cancelled = false
     async function load() {
       const { data } = await supabase.from('avatars').select('*').eq('is_active', true).limit(40)
@@ -41,7 +45,7 @@ export function AvatarVideosPage() {
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [user?.email])
 
   async function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
