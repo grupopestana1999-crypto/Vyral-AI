@@ -4,148 +4,194 @@ export interface BoosterDef {
   title: string
   description: string
   videoUrl: string
+  /** Custo de referência (mostrado no card). Pra cobrança por segundo, usar `pricingHint` em vez disso. */
   credits: number
-  tool: keyof typeof import('./credits').TOOL_CREDITS | 'studio_redirect' | 'influencer_lab'
+  /** Texto curto sobre cobrança quando não é fixa, ex: "2cr/s" ou "10cr/s com áudio". */
+  pricingHint?: string
+  /** Identificador do tool pra logging (`credit_usage_log.tool_name`, `api_logs.function_name`). */
+  tool: string
   edgeFunction?: string
   inputs: BoosterInput[]
-  resultType: 'text' | 'image' | 'video' | 'queued'
+  resultType: 'text' | 'image' | 'video' | 'audio' | 'queued'
   isFree?: boolean
+  /** Locked = aparece com lock overlay e modal "em breve" / "upgrade plano" no click. */
   locked?: boolean
+  /** Plano mínimo pra desbloquear esse booster. Sem valor = qualquer plano pago acessa. */
+  minPlan?: 'starter' | 'creator' | 'pro'
   emptyStateText?: string
 }
 
 export interface BoosterInput {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'image' | 'video' | 'radio'
+  type: 'text' | 'textarea' | 'image' | 'video' | 'audio' | 'radio' | 'url'
   placeholder?: string
   required?: boolean
   options?: { value: string; label: string }[]
   description?: string
 }
 
-// 13 boosters com vídeos de preview da iaTikShop CDN
+// 11 boosters na ordem definida pelo cliente em PDF "Pontuações Finais Vyral AI" (2026-04-27).
+// Removidos: Gerador de Prompt standalone, Nano Banana 2, Human Engine.
 export const BOOSTERS: BoosterDef[] = [
+  // 01
   {
     id: 'influencer-lab',
     slug: 'influencer-lab',
     title: 'Influencer Lab',
     description: 'Workflow visual por nodes pra criar imagens UGC com influencers virtuais',
     videoUrl: 'https://static.higgsfield.ai/explore/soul-character.mp4',
-    credits: 1,
+    credits: 2,
     tool: 'influencer_lab',
     inputs: [],
     resultType: 'image',
     isFree: false,
   },
-  {
-    id: 'grok-video',
-    slug: 'grok',
-    title: 'Grok IA',
-    description: 'Transforme imagens em vídeos com Grok AI',
-    videoUrl: 'https://mdueuksfunifyxfqpmdv.supabase.co/storage/v1/object/public/public-media/boosters/grok-preview.png',
-    credits: 5,
-    tool: 'grok_video',
-    edgeFunction: 'generate-grok-video',
-    inputs: [
-      { key: 'prompt', label: 'Descreva o vídeo que deseja criar', type: 'textarea', placeholder: 'Ex: pessoa segurando o produto e sorrindo pra câmera', required: true },
-      { key: 'image_url', label: 'Imagem de referência', type: 'image', required: true },
-    ],
-    resultType: 'queued',
-    emptyStateText: 'Crie vídeos a partir de uma imagem usando o Grok IA',
-  },
+  // 02
   {
     id: 'image-edit',
     slug: 'edit-image',
     title: 'Editar Imagem',
-    description: 'Substitua objetos em imagens com IA',
+    description: 'Edite imagens com IA: troque roupa, cenário, influencer ou pose',
     videoUrl: 'https://static.higgsfield.ai/explore/Edit-image-video-inpaint.mp4',
-    credits: 1,
+    credits: 2,
     tool: 'edit_image',
     edgeFunction: 'edit-image-inpaint',
-    inputs: [
-      { key: 'image_url', label: 'Imagem original', type: 'image', required: true },
-      { key: 'edit_prompt', label: 'O que você quer editar?', type: 'textarea', placeholder: 'Ex: trocar fundo por praia ao entardecer', required: true },
-      { key: 'mask_prompt', label: 'Área a editar (opcional)', type: 'text', placeholder: 'Ex: fundo' },
-    ],
+    inputs: [],
     resultType: 'image',
   },
+  // 03
   {
-    id: 'prompt-generator',
-    slug: 'prompt',
-    title: 'Gerador de Prompt',
-    description: 'Comandos JSON otimizados para geração de imagem/vídeo',
-    videoUrl: 'https://mdueuksfunifyxfqpmdv.supabase.co/storage/v1/object/public/public-media/boosters/prompt-preview.png',
-    credits: 0,
-    tool: 'prompt_generator',
-    edgeFunction: 'enhance-prompt',
-    inputs: [
-      { key: 'description', label: 'Descreva o que você quer criar', type: 'textarea', placeholder: 'Ex: mulher jovem segurando creme facial em banheiro iluminado', required: true, description: '10 gerações grátis (vida toda) · depois 1 crédito por uso' },
-      { key: 'type', label: 'Tipo', type: 'radio', options: [{ value: 'image', label: 'Imagem' }, { value: 'video', label: 'Vídeo' }] },
-    ],
-    resultType: 'text',
-    isFree: true,
-  },
-  {
-    id: 'nano-banana-2',
-    slug: 'nano-banana-2',
-    title: 'Nano Banana 2',
-    description: 'Geração avançada com referências e Google Search',
-    videoUrl: 'https://cdn.higgsfield.ai/application_main/bb9d59e1-0493-4031-a97d-27fc7f660c89.mp4',
-    credits: 5,
-    tool: 'nano_banana_2',
-    edgeFunction: 'generate-nano-banana-2',
-    inputs: [
-      { key: 'prompt', label: 'Prompt', type: 'textarea', required: true },
-      { key: 'reference_image', label: 'Imagem de referência (opcional)', type: 'image' },
-    ],
-    resultType: 'image',
-  },
-  {
-    id: 'veo-video',
-    slug: 'veo',
-    title: 'Veo 3.1',
-    description: 'Vídeos ultra-realistas com áudio nativo (Lite 5 / Fast 8)',
+    id: 'avatar-video',
+    slug: 'avatar-video',
+    title: 'Avatar Vídeos',
+    description: 'Crie vídeos ultrarrealistas com avatar e áudio sincronizado em segundos',
     videoUrl: 'https://mdueuksfunifyxfqpmdv.supabase.co/storage/v1/object/public/public-media/boosters/veo-preview.png',
-    credits: 5,
+    credits: 15,
+    pricingHint: 'Lite 15cr / Fast 30cr',
     tool: 'veo_video',
     edgeFunction: 'generate-veo-video',
-    inputs: [
-      { key: 'prompt', label: 'Descrição do vídeo', type: 'textarea', placeholder: 'Ex: mulher dançando em sala moderna, 5 segundos', required: true },
-      { key: 'image_url', label: 'Imagem inicial (opcional)', type: 'image' },
-      { key: 'mode', label: 'Qualidade', type: 'radio', options: [{ value: 'lite', label: 'Lite — 720p (5 créd)' }, { value: 'fast', label: 'Fast — 720p (8 créd)' }] },
-    ],
+    inputs: [],
     resultType: 'queued',
   },
+  // 04
+  {
+    id: 'avatar-creator',
+    slug: 'avatar-creator',
+    title: 'Avatar Creator',
+    description: 'Crie seu influencer personalizado com ajustes de pele, corpo e cabelo',
+    videoUrl: 'https://cdn.higgsfield.ai/application_main/bb9d59e1-0493-4031-a97d-27fc7f660c89.mp4',
+    credits: 2,
+    tool: 'avatar_creator',
+    edgeFunction: 'generate-influencer-image',
+    inputs: [],
+    resultType: 'image',
+    locked: true,
+    emptyStateText: 'Em polimento final — chega em E2.',
+  },
+  // 05
   {
     id: 'motion-control',
     slug: 'motion',
-    title: 'Controle de Movimento',
-    description: 'Kling 3.0 video-to-video: replica movimentos de um vídeo de referência',
+    title: 'Imitar Movimento',
+    description: 'Anime um personagem com base em vídeo de referência (dança/gestos)',
     videoUrl: 'https://static.higgsfield.ai/kling-motion-control-square.mp4',
-    credits: 30,
+    credits: 6,
+    pricingHint: '6cr/s 720p · 9cr/s 1080p',
     tool: 'motion_control',
     edgeFunction: 'generate-motion-video',
-    inputs: [
-      { key: 'image_url', label: 'Imagem do personagem', type: 'image', required: true },
-      { key: 'motion_prompt', label: 'Movimento desejado', type: 'textarea', placeholder: 'Ex: acenar com a mão direita', required: true },
-    ],
+    inputs: [],
     resultType: 'queued',
   },
+  // 06
   {
-    id: 'kling3-video',
-    slug: 'kling',
-    title: 'Kling 3.0',
-    description: 'Vídeos cinematográficos com áudio e multi-frame',
+    id: 'skin-enhancer',
+    slug: 'pele-ultra',
+    title: 'Pele Ultra Realista',
+    description: 'Aprimore texturas da pele com realismo extremo',
+    videoUrl: 'https://cdn.higgsfield.ai/application_main/bb9d59e1-0493-4031-a97d-27fc7f660c89.mp4',
+    credits: 4,
+    tool: 'skin_enhancer',
+    edgeFunction: 'generate-nano-banana-2',
+    inputs: [],
+    resultType: 'image',
+    locked: true,
+    emptyStateText: 'Em polimento final — chega em E2.',
+  },
+  // 07
+  {
+    id: 'videos-ia',
+    slug: 'videos-ia',
+    title: 'Vídeos IA',
+    description: 'Transforme imagens em vídeos animados com IA',
+    videoUrl: 'https://mdueuksfunifyxfqpmdv.supabase.co/storage/v1/object/public/public-media/boosters/grok-preview.png',
+    credits: 2,
+    pricingHint: '2cr/s',
+    tool: 'grok_video',
+    edgeFunction: 'generate-grok-video',
+    inputs: [],
+    resultType: 'queued',
+  },
+  // 08
+  {
+    id: 'filmes-ia',
+    slug: 'filmes-ia',
+    title: 'Filmes IA',
+    description: 'Vídeos cinematográficos com áudio nativo e multi-frame (Kling 3.0)',
     videoUrl: 'https://static.higgsfield.ai/kling-3/kling-3.mp4',
-    credits: 30,
+    credits: 7,
+    pricingHint: '7cr/s sem áudio · 10cr/s com áudio',
     tool: 'kling_3',
     edgeFunction: 'generate-kling3-video',
-    inputs: [
-      { key: 'prompt', label: 'Prompt do vídeo', type: 'textarea', required: true },
-      { key: 'image_url', label: 'Imagem inicial (opcional)', type: 'image' },
-    ],
+    inputs: [],
     resultType: 'queued',
+  },
+  // 09
+  {
+    id: 'sora-remover',
+    slug: 'sora-remover',
+    title: 'Sora Remover',
+    description: 'Remova a marca d\'água dos vídeos do Sora 2',
+    videoUrl: 'https://cdn.higgsfield.ai/application_main/bb9d59e1-0493-4031-a97d-27fc7f660c89.mp4',
+    credits: 20,
+    tool: 'sora_remover',
+    edgeFunction: 'sora-watermark-remover',
+    inputs: [],
+    resultType: 'video',
+    locked: true,
+    emptyStateText: 'Em polimento final — chega em E2.',
+  },
+  // 10
+  {
+    id: 'voice-clone',
+    slug: 'clonagem-voz',
+    title: 'Clonagem de Voz',
+    description: 'Clone uma voz e gere falas personalizadas com ela',
+    videoUrl: 'https://cdn.higgsfield.ai/application_main/bb9d59e1-0493-4031-a97d-27fc7f660c89.mp4',
+    credits: 5,
+    pricingHint: '5cr / 1000 chars',
+    tool: 'voice_clone',
+    edgeFunction: 'text-to-speech',
+    inputs: [],
+    resultType: 'audio',
+    locked: true,
+    emptyStateText: 'Em desenvolvimento — chega em E3.',
+  },
+  // 11
+  {
+    id: 'transcribe-audio',
+    slug: 'transcricao',
+    title: 'Transcrição de Áudio',
+    description: 'Transforme áudio em texto rapidamente',
+    videoUrl: 'https://cdn.higgsfield.ai/application_main/bb9d59e1-0493-4031-a97d-27fc7f660c89.mp4',
+    credits: 2,
+    pricingHint: '2cr / minuto',
+    tool: 'transcribe_audio',
+    edgeFunction: 'transcribe-audio',
+    inputs: [],
+    resultType: 'text',
+    locked: true,
+    emptyStateText: 'Em desenvolvimento — chega em E3.',
   },
 ]
 

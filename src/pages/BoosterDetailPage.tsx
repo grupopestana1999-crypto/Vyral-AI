@@ -107,7 +107,7 @@ export function BoosterDetailPage() {
     return init
   })
   const [generating, setGenerating] = useState(false)
-  const [result, setResult] = useState<{ type: 'text' | 'image' | 'video' | 'queued'; data: string } | null>(null)
+  const [result, setResult] = useState<{ type: 'text' | 'image' | 'video' | 'audio' | 'queued'; data: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   if (!booster) return <Navigate to="/booster" replace />
