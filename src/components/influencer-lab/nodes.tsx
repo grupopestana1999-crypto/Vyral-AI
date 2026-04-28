@@ -52,7 +52,7 @@ export function ProductNode({ id, data, selected }: NodeProps) {
         )}
       </div>
       {open && (
-        <div className="nodrag absolute left-full top-0 ml-2 w-72 max-h-96 overflow-y-auto bg-surface-400 border border-white/10 rounded-xl shadow-2xl p-2 z-50">
+        <div className="nodrag nowheel absolute left-full top-0 ml-2 w-72 max-h-96 overflow-y-auto bg-surface-400 border border-white/10 rounded-xl shadow-2xl p-2 z-50">
           <p className="text-[10px] text-white/40 px-2 py-1">Produtos virais</p>
           {products.map(p => (
             <button key={p.id} onClick={() => select(p)} className="w-full flex gap-2 items-center p-2 rounded hover:bg-white/5 cursor-pointer text-left">
@@ -110,7 +110,7 @@ export function AvatarNode({ id, data, selected }: NodeProps) {
         )}
       </div>
       {open && (
-        <div className="nodrag absolute left-full top-0 ml-2 w-72 max-h-96 overflow-y-auto bg-surface-400 border border-white/10 rounded-xl shadow-2xl p-2 z-50">
+        <div className="nodrag nowheel absolute left-full top-0 ml-2 w-72 max-h-96 overflow-y-auto bg-surface-400 border border-white/10 rounded-xl shadow-2xl p-2 z-50">
           <div className="flex gap-1 mb-2">
             <button onClick={() => setGender('female')} className={`flex-1 py-1 rounded text-[10px] ${gender === 'female' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Feminino</button>
             <button onClick={() => setGender('male')} className={`flex-1 py-1 rounded text-[10px] ${gender === 'male' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Masculino</button>
@@ -164,7 +164,7 @@ export function SceneNode({ id, data, selected }: NodeProps) {
         )}
       </div>
       {open && (
-        <div className="nodrag absolute left-full top-0 ml-2 w-72 max-h-96 overflow-y-auto bg-surface-400 border border-white/10 rounded-xl shadow-2xl p-2 z-50">
+        <div className="nodrag nowheel absolute left-full top-0 ml-2 w-72 max-h-96 overflow-y-auto bg-surface-400 border border-white/10 rounded-xl shadow-2xl p-2 z-50">
           <div className="flex gap-1 mb-2">
             <button onClick={() => setTab('ready')} className={`flex-1 py-1 rounded text-[10px] ${tab === 'ready' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Prontas</button>
             <button onClick={() => setTab('custom')} className={`flex-1 py-1 rounded text-[10px] ${tab === 'custom' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Personalizada</button>
@@ -227,7 +227,7 @@ export function SettingsNode({ id, data, selected }: NodeProps) {
         <p className="text-[9px] text-primary-400 mt-0.5">{open ? 'Fechar' : 'Editar'}</p>
       </button>
       {open && (
-        <div className="nodrag absolute left-full top-0 ml-2 w-80 max-h-[420px] overflow-y-auto bg-surface-400 border border-white/10 rounded-xl shadow-2xl p-3 z-50 space-y-3">
+        <div className="nodrag nowheel absolute left-full top-0 ml-2 w-80 max-h-[420px] overflow-y-auto bg-surface-400 border border-white/10 rounded-xl shadow-2xl p-3 z-50 space-y-3">
           <div>
             <p className="text-[10px] text-white/40 mb-1">Pose</p>
             <div className="grid grid-cols-3 gap-1">
@@ -293,7 +293,7 @@ export function GenerateNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Left} className="!bg-violet-400 !w-2 !h-2" />
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
         <Sparkles size={14} className="text-violet-400" />
-        <span className="text-xs font-semibold text-white">Executar</span>
+        <span className="text-xs font-semibold text-white">Gerar Imagem</span>
       </div>
       <div className="p-3 space-y-2">
         <button
@@ -302,7 +302,7 @@ export function GenerateNode({ data, selected }: NodeProps) {
           className="w-full py-2 rounded-lg bg-neon text-surface-500 text-xs font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1.5"
         >
           {d.status === 'generating' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-          {d.status === 'generating' ? 'Gerando...' : d.status === 'done' ? 'Rodar de novo' : 'Executar workflow'}
+          {d.status === 'generating' ? 'Gerando...' : d.status === 'done' ? 'Gerar de novo' : 'Gerar Imagem'}
         </button>
         {!d.ready && d.status !== 'done' && (
           <p className="text-[9px] text-yellow-400/80 text-center">Conecte Produto + Avatar + Cena + Ajustes</p>
@@ -501,16 +501,16 @@ export function GenerateVideoActionNode({ id, data, selected }: NodeProps) {
   )
 }
 
-// Action: Controle de Movimento (input Image+Prompt → Kling 3.0)
+// Action: Imitar Movimento (input Image+Prompt → Kling Motion Control)
 export function MotionActionNode({ data, selected }: NodeProps) {
   const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean }
   return (
     <ActionNodeShell
-      icon={Activity} color="!bg-rose-400" label="Controle de Movimento"
+      icon={Activity} color="!bg-rose-400" label="Imitar Movimento"
       data={{ ...d, mediaType: 'video', readyHint: 'Conecte Imagem + Prompt' }}
       statusBg={selected ? 'ring-2 ring-primary-500' : ''}
     >
-      <p className="text-[9px] text-white/40 text-center">30 créditos · Kling 3.0</p>
+      <p className="text-[9px] text-white/40 text-center">6 cr/s 720p · Kling Motion</p>
     </ActionNodeShell>
   )
 }
@@ -524,10 +524,10 @@ export const NODE_LIBRARY: { type: string; label: string; icon: typeof Package; 
   { type: 'image', label: 'Imagem', icon: ImageIcon, color: 'text-cyan-400', defaults: {}, group: 'input' },
   { type: 'prompt', label: 'Prompt', icon: MessageSquare, color: 'text-amber-400', defaults: { prompt: '' }, group: 'input' },
   // Actions
-  { type: 'generate', label: 'Gerar Imagem UGC', icon: Sparkles, color: 'text-violet-400', defaults: { status: 'idle' }, group: 'action' },
+  { type: 'generate', label: 'Gerar Imagem', icon: Sparkles, color: 'text-violet-400', defaults: { status: 'idle' }, group: 'action' },
   { type: 'edit-image', label: 'Editar Imagem', icon: Pencil, color: 'text-fuchsia-400', defaults: { status: 'idle' }, group: 'action' },
   { type: 'video', label: 'Gerar Vídeo', icon: Film, color: 'text-blue-400', defaults: { status: 'idle', mode: 'veo-lite' }, group: 'action' },
-  { type: 'motion', label: 'Controle Movimento', icon: Activity, color: 'text-rose-400', defaults: { status: 'idle' }, group: 'action' },
+  { type: 'motion', label: 'Imitar Movimento', icon: Activity, color: 'text-rose-400', defaults: { status: 'idle' }, group: 'action' },
 ]
 
 export { type LabNodeContext }

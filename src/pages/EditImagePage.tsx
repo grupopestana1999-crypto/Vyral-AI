@@ -79,6 +79,10 @@ export function EditImagePage() {
     if (!editPrompt.trim()) { toast.error('Descreva a edição ou escolha um template'); return }
 
     setGenerating(true); setError(null); setResultUrl(null)
+    // Timeout client-side: edge function tem deadline interno de 80s; damos 100s no client
+    // pra cobrir RTT + parse. Sem isso o fetch ficava pendurado pra sempre se a edge travasse.
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 100_000)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
@@ -90,9 +94,11 @@ export function EditImagePage() {
         body: JSON.stringify({
           image_url: mainImage,
           edit_prompt: editPrompt,
-          mask_prompt: template ?? undefined,
+          // Não enviar template ID como mask_prompt — é bug. O texto descritivo do template
+          // já vai em edit_prompt. mask_prompt fica reservado pra área específica futura.
           format,
         }),
+        signal: controller.signal,
       })
       const data = await r.json()
       if (!r.ok || data?.error) {
@@ -108,8 +114,10 @@ export function EditImagePage() {
         setError('Resposta inesperada da IA. Tente novamente.')
       }
     } catch (err) {
-      setError((err as Error).message)
+      const e = err as Error
+      setError(e.name === 'AbortError' ? 'Tempo excedido (100s). A IA demorou muito — tente novamente.' : e.message)
     } finally {
+      clearTimeout(timeoutId)
       setGenerating(false)
     }
   }

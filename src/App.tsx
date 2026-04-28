@@ -18,7 +18,10 @@ import { ReferralPage } from './pages/ReferralPage'
 import { CreditsPage } from './pages/CreditsPage'
 import { BoosterDetailPage } from './pages/BoosterDetailPage'
 import { EditImagePage } from './pages/EditImagePage'
-import { GrokPage } from './pages/GrokPage'
+import { VideosIaPage } from './pages/VideosIaPage'
+import { FilmesIaPage } from './pages/FilmesIaPage'
+import { AvatarVideosPage } from './pages/AvatarVideosPage'
+import { ImitarMovimentoPage } from './pages/ImitarMovimentoPage'
 import { InfluencerLabPage } from './pages/InfluencerLabPage'
 import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminDashboard } from './pages/admin/AdminDashboard'
@@ -77,8 +80,15 @@ export default function App() {
           <Route path="/influencer" element={<StudioPage />} />
           <Route path="/booster" element={<BoostersPage />} />
           <Route path="/booster/edit-image" element={<EditImagePage />} />
-          <Route path="/booster/grok" element={<GrokPage />} />
           <Route path="/booster/influencer-lab" element={<InfluencerLabPage />} />
+          <Route path="/booster/avatar-video" element={<AvatarVideosPage />} />
+          <Route path="/booster/motion" element={<ImitarMovimentoPage />} />
+          <Route path="/booster/videos-ia" element={<VideosIaPage />} />
+          <Route path="/booster/filmes-ia" element={<FilmesIaPage />} />
+          {/* Aliases legados pra evitar 404 em links antigos */}
+          <Route path="/booster/grok" element={<Navigate to="/booster/videos-ia" replace />} />
+          <Route path="/booster/veo" element={<Navigate to="/booster/avatar-video" replace />} />
+          <Route path="/booster/kling" element={<Navigate to="/booster/filmes-ia" replace />} />
           <Route path="/booster/:tool" element={<BoosterDetailPage />} />
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/calculator" element={<CalculatorPage />} />
