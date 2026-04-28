@@ -25,6 +25,8 @@ import { ImitarMovimentoPage } from './pages/ImitarMovimentoPage'
 import { AvatarCreatorPage } from './pages/AvatarCreatorPage'
 import { PeleUltraPage } from './pages/PeleUltraPage'
 import { SoraRemoverPage } from './pages/SoraRemoverPage'
+import { ClonagemVozPage } from './pages/ClonagemVozPage'
+import { TranscricaoPage } from './pages/TranscricaoPage'
 import { InfluencerLabPage } from './pages/InfluencerLabPage'
 import { AdminLayout } from './pages/admin/AdminLayout'
 import { AdminDashboard } from './pages/admin/AdminDashboard'
@@ -88,6 +90,8 @@ export default function App() {
           <Route path="/booster/avatar-creator" element={<AvatarCreatorPage />} />
           <Route path="/booster/pele-ultra" element={<PeleUltraPage />} />
           <Route path="/booster/sora-remover" element={<SoraRemoverPage />} />
+          <Route path="/booster/clonagem-voz" element={<ClonagemVozPage />} />
+          <Route path="/booster/transcricao" element={<TranscricaoPage />} />
           <Route path="/booster/motion" element={<ImitarMovimentoPage />} />
           <Route path="/booster/videos-ia" element={<VideosIaPage />} />
           <Route path="/booster/filmes-ia" element={<FilmesIaPage />} />
