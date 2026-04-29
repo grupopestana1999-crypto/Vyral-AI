@@ -94,11 +94,12 @@ async function fetchUserRole(userId: string): Promise<UserRole> {
 }
 
 async function fetchSubscription(email: string): Promise<Subscription | null> {
+  // Retorna a subscription mais recente independente do status — ProtectedRoute precisa
+  // saber se foi cancelada/refunded pra bloquear acesso.
   const { data } = await supabase
     .from('subscriptions')
     .select('*')
     .eq('customer_email', email)
-    .in('status', ['active', 'approved'])
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -115,7 +116,8 @@ function subscribeToSubscriptionChanges(email: string, set: (partial: Partial<Au
       { event: 'UPDATE', schema: 'public', table: 'subscriptions', filter: `customer_email=eq.${normalized}` },
       (payload) => {
         const next = payload.new as Subscription
-        if (next && (next.status === 'active' || next.status === 'approved')) {
+        if (next) {
+          // Atualiza sempre — inclusive cancelled/refunded pra ProtectedRoute reagir em tempo real
           set({ subscription: next })
         }
       }

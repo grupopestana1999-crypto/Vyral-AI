@@ -15,22 +15,39 @@ export function ResetPasswordPage() {
 
   useEffect(() => {
     let cancelled = false
-    async function check() {
-      // Aguarda detectSessionInUrl processar o hash do link de recovery
-      await new Promise(r => setTimeout(r, 300))
+    let resolved = false
+
+    async function checkSession() {
       const { data } = await supabase.auth.getSession()
-      if (cancelled) return
-      if (data.session?.user) setState('ready')
-      else setState('no_session')
+      if (cancelled || resolved) return
+      if (data.session?.user) {
+        resolved = true
+        setState('ready')
+      }
     }
-    check()
-    // Caso o evento PASSWORD_RECOVERY chegue depois, ainda processamos
+
+    // Listener primário — o link de recovery dispara PASSWORD_RECOVERY ou SIGNED_IN
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
-        if (!cancelled) setState('ready')
+      if (cancelled) return
+      if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+        resolved = true
+        setState('ready')
       }
     })
-    return () => { cancelled = true; sub.subscription.unsubscribe() }
+
+    // Check imediato (caso a sessão já esteja no localStorage)
+    checkSession()
+
+    // Fallback timeout — se em 5s não resolveu, considera link inválido
+    const timeoutId = setTimeout(() => {
+      if (!cancelled && !resolved) setState('no_session')
+    }, 5000)
+
+    return () => {
+      cancelled = true
+      sub.subscription.unsubscribe()
+      clearTimeout(timeoutId)
+    }
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -58,9 +75,10 @@ export function ResetPasswordPage() {
 
         <div className="bg-surface-300 rounded-2xl border border-white/5 p-6">
           {state === 'verifying' && (
-            <div className="flex items-center justify-center gap-3 py-8">
+            <div className="flex flex-col items-center justify-center gap-3 py-8">
               <Loader2 size={20} className="animate-spin text-primary-400" />
               <p className="text-sm text-white/60">Validando link…</p>
+              <p className="text-[10px] text-white/30">Se demorar mais de 5s, o link expirou.</p>
             </div>
           )}
 
