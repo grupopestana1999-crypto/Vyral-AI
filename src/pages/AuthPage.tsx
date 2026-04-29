@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Mail, Lock, ArrowLeft, Loader2, Gift } from 'lucide-react'
+import { Sparkles, Mail, Lock, ArrowLeft, Loader2, Gift, Send } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth-store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import logoImg from '../assets/logo.png'
 
-type Tab = 'login' | 'register' | 'forgot'
+type Tab = 'login' | 'register' | 'forgot' | 'magic'
 
 const REF_PATTERN = /^VYRAL-[A-Z0-9]{6}$/
 
@@ -82,12 +82,24 @@ export function AuthPage() {
         toast.success('Conta criada! Verifique seu e-mail.')
         setTab('login')
       }
-    } else {
+    } else if (tab === 'forgot') {
       const { error } = await resetPassword(email)
       if (error) {
         toast.error(error)
       } else {
-        toast.success('E-mail de recuperação enviado!')
+        toast.success('E-mail de recuperação enviado! Confira sua caixa.')
+        setTab('login')
+      }
+    } else if (tab === 'magic') {
+      // Reenvia magic link de acesso (útil quando o link do welcome email expirou)
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: window.location.origin + '/dashboard', shouldCreateUser: false },
+      })
+      if (error) {
+        toast.error(error.message)
+      } else {
+        toast.success('Link de acesso enviado pro seu email! Válido por 1h.', { duration: 6000 })
         setTab('login')
       }
     }
@@ -104,6 +116,7 @@ export function AuthPage() {
             {tab === 'login' && 'Acesse sua conta para continuar gerando conteúdo viral'}
             {tab === 'register' && 'Crie sua conta e comece a gerar conteúdo viral'}
             {tab === 'forgot' && 'Informe seu e-mail para recuperar sua senha'}
+            {tab === 'magic' && 'Te enviaremos um link de acesso por email (válido 1h)'}
           </p>
         </div>
 
@@ -143,7 +156,7 @@ export function AuthPage() {
             </div>
           )}
 
-          {tab === 'forgot' && (
+          {(tab === 'forgot' || tab === 'magic') && (
             <button
               onClick={() => setTab('login')}
               className="flex items-center gap-1 text-sm text-white/50 hover:text-white mb-4 cursor-pointer"
@@ -168,7 +181,7 @@ export function AuthPage() {
               </div>
             </div>
 
-            {tab !== 'forgot' && (
+            {tab !== 'forgot' && tab !== 'magic' && (
               <div>
                 <div className="flex justify-between mb-1.5">
                   <label className="text-sm text-white/60">Senha</label>
@@ -205,14 +218,27 @@ export function AuthPage() {
                 <Loader2 size={18} className="animate-spin" />
               ) : (
                 <>
-                  <Sparkles size={18} />
+                  {tab === 'magic' ? <Send size={18} /> : <Sparkles size={18} />}
                   {tab === 'login' && 'Entrar'}
                   {tab === 'register' && 'Criar conta'}
                   {tab === 'forgot' && 'Enviar e-mail de recuperação'}
+                  {tab === 'magic' && 'Enviar link de acesso'}
                 </>
               )}
             </button>
           </form>
+
+          {tab === 'login' && (
+            <div className="mt-4 pt-4 border-t border-white/5">
+              <button
+                type="button"
+                onClick={() => setTab('magic')}
+                className="w-full text-xs text-primary-400 hover:text-primary-300 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Send size={12} /> Recebi email de acesso e o link expirou — me mande outro
+              </button>
+            </div>
+          )}
         </div>
 
         <p className="text-center text-xs text-white/30 mt-4">

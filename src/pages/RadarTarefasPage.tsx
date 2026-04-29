@@ -91,7 +91,23 @@ export function RadarTarefasPage() {
       setLoading(false)
     }
     load()
-    return () => { cancelled = true }
+
+    // Realtime: se admin libera/revoga acesso, atualiza UI sem F5
+    const channel = supabase.channel('radar-unlock-' + user.email)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'radar_unlocks', filter: `user_email=eq.${user.email}` },
+        () => { if (!cancelled) load() })
+      .subscribe()
+
+    // Refetch ao voltar pra aba (caso Realtime não chegue)
+    function onFocus() { if (!cancelled) load() }
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      cancelled = true
+      supabase.removeChannel(channel)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [user?.email])
 
   async function loadOpportunities(p: UserPrefs) {

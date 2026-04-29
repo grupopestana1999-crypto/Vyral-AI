@@ -50,6 +50,7 @@ import { SuperVyralPage } from './pages/SuperVyralPage'
 import { TermsPage } from './pages/TermsPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { PublicCheckoutPage } from './pages/PublicCheckoutPage'
+import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { useBoosterSettings } from './stores/booster-settings-store'
 
 export default function App() {
@@ -79,6 +80,7 @@ export default function App() {
       />
       <Routes>
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/comprar" element={<PublicCheckoutPage />} />

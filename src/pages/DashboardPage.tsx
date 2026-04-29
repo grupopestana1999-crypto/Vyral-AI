@@ -27,7 +27,7 @@ const FEATURED: FeatureCard[] = [
   {
     title: 'Studio IA',
     description: 'Crie imagens UGC ultrarrealistas com produtos e influencers virtuais',
-    videoUrl: 'https://mdueuksfunifyxfqpmdv.supabase.co/storage/v1/object/public/public-media/boosters/video%20do%20BOOSTER%20=%20Avatar%20.mp4',
+    videoUrl: 'https://mdueuksfunifyxfqpmdv.supabase.co/storage/v1/object/public/public-media/boosters/veo-preview.png',
     pricingHint: '2 cr · 1ª grátis',
     route: '/influencer',
   },
@@ -102,7 +102,11 @@ export function DashboardPage() {
               className="group relative aspect-[4/5] bg-surface-300 border border-white/5 rounded-xl overflow-hidden text-left transition-all cursor-pointer hover:border-primary-500/40"
             >
               <div className="absolute inset-0">
-                <LazyVideo src={f.videoUrl} className="w-full h-full object-cover" />
+                {/\.(png|jpe?g|webp|gif|avif)(\?|$)/i.test(f.videoUrl) ? (
+                  <img src={f.videoUrl} alt={f.title} className="w-full h-full object-cover" loading="lazy" />
+                ) : (
+                  <LazyVideo src={f.videoUrl} className="w-full h-full object-cover" />
+                )}
               </div>
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent pointer-events-none" />
               {f.pricingHint && (
