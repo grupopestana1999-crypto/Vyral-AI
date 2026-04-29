@@ -9,6 +9,7 @@ import { useBoosterSettings } from '../stores/booster-settings-store'
 function routeFor(b: BoosterDef): string {
   if (b.tool === 'influencer_lab') return '/booster/influencer-lab'
   if (b.tool === 'studio_redirect') return '/influencer'
+  if (b.tool === 'super_vyral') return '/booster/super-vyral'
   return `/booster/${b.slug}`
 }
 

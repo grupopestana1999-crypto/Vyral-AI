@@ -34,6 +34,20 @@ export interface BoosterInput {
 // 11 boosters na ordem definida pelo cliente em PDF "Pontuações Finais Vyral AI" (2026-04-27).
 // Removidos: Gerador de Prompt standalone, Nano Banana 2, Human Engine.
 export const BOOSTERS: BoosterDef[] = [
+  // 00 - Super Vyral (workflow automático com 4 templates pré-elaborados)
+  {
+    id: 'super-vyral',
+    slug: 'super-vyral',
+    title: 'Super Vyral',
+    description: 'Workflow automático com 4 templates pré-elaborados — escolha, suba imagem e a IA faz o resto',
+    videoUrl: 'https://static.higgsfield.ai/kling-3/kling-3.mp4',
+    credits: 0,
+    pricingHint: 'Por workflow',
+    tool: 'super_vyral',
+    inputs: [],
+    resultType: 'queued',
+    isFree: false,
+  },
   // 01 - Creator+
   {
     id: 'influencer-lab',

@@ -42,6 +42,11 @@ import { AdminViralVideos } from './pages/admin/AdminViralVideos'
 import { AdminViralCreators } from './pages/admin/AdminViralCreators'
 import { AdminPagamentos } from './pages/admin/AdminPagamentos'
 import { AdminEmail } from './pages/admin/AdminEmail'
+import { AdminRadar } from './pages/admin/AdminRadar'
+import { RadarPage } from './pages/RadarPage'
+import { RadarTiktokPage } from './pages/RadarTiktokPage'
+import { RadarTarefasPage } from './pages/RadarTarefasPage'
+import { SuperVyralPage } from './pages/SuperVyralPage'
 import { TermsPage } from './pages/TermsPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { PublicCheckoutPage } from './pages/PublicCheckoutPage'
@@ -91,7 +96,11 @@ export default function App() {
           <Route path="/viral-videos" element={<ViralVideosPage />} />
           <Route path="/viral-creators" element={<ViralCreatorsPage />} />
           <Route path="/influencer" element={<StudioPage />} />
+          <Route path="/radar" element={<RadarPage />} />
+          <Route path="/radar/tiktok" element={<RadarTiktokPage />} />
+          <Route path="/radar/tarefas" element={<RadarTarefasPage />} />
           <Route path="/booster" element={<BoostersPage />} />
+          <Route path="/booster/super-vyral" element={<SuperVyralPage />} />
           <Route path="/booster/edit-image" element={<EditImagePage />} />
           <Route path="/booster/influencer-lab" element={<InfluencerLabPage />} />
           <Route path="/booster/avatar-video" element={<AvatarVideosPage />} />
@@ -124,6 +133,7 @@ export default function App() {
             <Route path="viral-creators" element={<AdminViralCreators />} />
             <Route path="templates" element={<AdminTemplates />} />
             <Route path="boosters" element={<AdminBoosters />} />
+            <Route path="radar" element={<AdminRadar />} />
             <Route path="referrals" element={<AdminReferrals />} />
             <Route path="logs" element={<AdminLogs />} />
             <Route path="settings" element={<AdminSettings />} />

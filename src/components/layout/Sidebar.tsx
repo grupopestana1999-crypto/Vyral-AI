@@ -1,9 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
-  ShoppingBag,
-  Video,
-  Users,
   Sparkles,
   Zap,
   FileText,
@@ -11,15 +8,14 @@ import {
   Gift,
   ChevronLeft,
   ChevronRight,
+  Radar,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import logoImg from '../../assets/logo.png'
 
 const menuItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/viral-products', label: 'Produtos Virais', icon: ShoppingBag },
-  { path: '/viral-videos', label: 'Vídeos Virais', icon: Video },
-  { path: '/viral-creators', label: 'Criadores Virais', icon: Users },
+  { path: '/radar', label: 'Radar de Oportunidades', icon: Radar },
   { path: '/influencer', label: 'Studio IA', icon: Sparkles },
   { path: '/booster', label: 'Boosters', icon: Zap },
   { path: '/templates', label: 'Templates', icon: FileText },

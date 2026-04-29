@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, Coins, FileText, Zap, Gift, Settings, ArrowLeft, Activity, Package, Video, UserCircle, CreditCard, Mail } from 'lucide-react'
+import { LayoutDashboard, Users, Coins, FileText, Zap, Gift, Settings, ArrowLeft, Activity, Package, Video, UserCircle, CreditCard, Mail, Target } from 'lucide-react'
 import { useAuthStore } from '../../stores/auth-store'
 
 const adminMenu = [
@@ -12,6 +12,7 @@ const adminMenu = [
   { path: '/admin/viral-creators', label: 'Criadores Virais', icon: UserCircle },
   { path: '/admin/templates', label: 'Templates', icon: FileText },
   { path: '/admin/boosters', label: 'Boosters', icon: Zap },
+  { path: '/admin/radar', label: 'Radar Tarefas', icon: Target },
   { path: '/admin/referrals', label: 'Indicações', icon: Gift },
   { path: '/admin/email', label: 'Email', icon: Mail },
   { path: '/admin/logs', label: 'Logs', icon: Activity },

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Coins, ChevronRight, Ban, ShieldCheck, Mail, History, Crown, X, Loader2, UserPlus } from 'lucide-react'
+import { Search, Coins, ChevronRight, Ban, ShieldCheck, Mail, History, Crown, X, Loader2, UserPlus, Radar } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 
@@ -38,6 +38,7 @@ export function AdminUsers() {
   const [history, setHistory] = useState<HistoryRow[] | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [radarUnlocked, setRadarUnlocked] = useState<Set<string>>(new Set())
   const [createOpen, setCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState({ email: '', plan_type: 'starter' as 'starter' | 'creator' | 'pro', credits: 0, send_welcome: true })
   const [creating, setCreating] = useState(false)
@@ -46,10 +47,28 @@ export function AdminUsers() {
 
   async function load() {
     setLoading(true)
-    const { data, error } = await supabase.rpc('admin_list_users')
-    if (error) toast.error('Erro ao carregar usuários: ' + error.message)
-    setUsers((data ?? []) as UserRow[])
+    const [usersRes, unlocksRes] = await Promise.all([
+      supabase.rpc('admin_list_users'),
+      supabase.from('radar_unlocks').select('user_email'),
+    ])
+    if (usersRes.error) toast.error('Erro ao carregar usuários: ' + usersRes.error.message)
+    setRadarUnlocked(new Set((unlocksRes.data ?? []).map((r: { user_email: string }) => r.user_email)))
+    setUsers((usersRes.data ?? []) as UserRow[])
     setLoading(false)
+  }
+
+  async function toggleRadar(u: UserRow) {
+    const isUnlocked = radarUnlocked.has(u.email)
+    const action = isUnlocked ? 'revoke_radar' : 'grant_radar'
+    const msg = isUnlocked ? `Revogar acesso ao Radar de Tarefas de ${u.email}?` : `Liberar acesso ao Radar de Tarefas pra ${u.email} (cortesia)?`
+    if (!confirm(msg)) return
+    setBusy(true)
+    const { error } = await supabase.functions.invoke('admin-update-user', {
+      body: { user_id: u.id, email: u.email, action },
+    })
+    setBusy(false)
+    if (error) toast.error('Erro: ' + error.message)
+    else { toast.success(isUnlocked ? 'Acesso revogado' : 'Radar liberado'); load() }
   }
 
   async function adjustCredits(email: string) {
@@ -264,6 +283,14 @@ export function AdminUsers() {
                       className="flex-1 px-3 py-2 bg-surface-400 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500" />
                     <button onClick={() => changeEmail(u)} disabled={busy || !newEmail}
                       className="px-3 py-2 rounded-lg bg-primary-600 text-white text-xs font-medium hover:brightness-110 disabled:opacity-50 cursor-pointer">Trocar</button>
+                  </div>
+
+                  {/* Radar de Tarefas */}
+                  <div>
+                    <button onClick={() => toggleRadar(u)} disabled={busy}
+                      className={`w-full px-3 py-2 rounded-lg text-xs font-medium cursor-pointer flex items-center justify-center gap-1.5 ${radarUnlocked.has(u.email) ? 'bg-purple-600/20 text-purple-300 hover:bg-purple-600/30' : 'bg-surface-400 text-white/70 hover:text-white'}`}>
+                      <Radar size={14} /> {radarUnlocked.has(u.email) ? 'Revogar Radar de Tarefas' : 'Liberar Radar de Tarefas (cortesia)'}
+                    </button>
                   </div>
 
                   {/* Bloquear / histórico */}
