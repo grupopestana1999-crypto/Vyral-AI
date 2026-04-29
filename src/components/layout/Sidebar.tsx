@@ -11,7 +11,6 @@ import {
   Gift,
   ChevronLeft,
   ChevronRight,
-  Download,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import logoImg from '../../assets/logo.png'
@@ -79,12 +78,8 @@ export function Sidebar() {
       </nav>
 
       <div className="p-3 border-t border-white/5">
-        <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-neon text-surface-500 font-semibold text-sm hover:brightness-110 transition-all cursor-pointer">
-          <Download size={16} />
-          {!collapsed && <span>Instalar</span>}
-        </button>
         {!collapsed && (
-          <p className="text-center text-xs text-white/20 mt-3">
+          <p className="text-center text-xs text-white/20">
             &copy; 2026 Vyral AI
           </p>
         )}

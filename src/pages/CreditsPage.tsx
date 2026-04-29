@@ -21,32 +21,29 @@ export function CreditsPage() {
     if (!user) return
     setPurchasing(packageId)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('sessão expirada')
-
-      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/stripe-checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'apikey': token,
-        },
-        body: JSON.stringify({ package_name: packageId, credits: _credits, amount_brl: price }),
+      const { data, error } = await supabase.functions.invoke('stripe-checkout', {
+        body: { package_name: packageId, credits: _credits, amount_brl: price },
       })
-      const data = await r.json()
-      if (!r.ok || data?.error) {
-        toast.error(data?.error || `Erro ${r.status}`)
+      if (error) {
+        toast.error('Erro ao iniciar checkout: ' + error.message)
+        setPurchasing(null)
         return
       }
-      if (data?.url) {
-        window.open(data.url, '_blank', 'noopener,noreferrer')
-      } else {
-        toast.error('Checkout não retornou URL válida')
+      const checkoutUrl = (data as { url?: string; error?: string } | null)?.url
+      if ((data as { error?: string } | null)?.error) {
+        toast.error((data as { error: string }).error)
+        setPurchasing(null)
+        return
       }
+      if (!checkoutUrl) {
+        toast.error('Checkout não retornou URL válida')
+        setPurchasing(null)
+        return
+      }
+      // Redireciona pra Stripe na mesma aba (window.open após await é bloqueado como popup)
+      window.location.href = checkoutUrl
     } catch (err) {
       toast.error('Erro: ' + (err as Error).message)
-    } finally {
       setPurchasing(null)
     }
   }
@@ -54,7 +51,7 @@ export function CreditsPage() {
   function handleUpgradePlan(planKey: string) {
     if (!(planKey in { starter: 1, creator: 1, pro: 1 })) return
     const url = buildHotmartCheckoutUrl(planKey as HotmartPlan)
-    window.open(url, '_blank', 'noopener,noreferrer')
+    window.location.href = url
   }
 
   return (
