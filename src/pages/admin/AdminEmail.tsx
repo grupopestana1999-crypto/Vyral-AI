@@ -1,23 +1,42 @@
 import { useState, useEffect } from 'react'
-import { Mail, Search, RotateCw, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { Mail, Search, RotateCw, Loader2, CheckCircle2, AlertCircle, Inbox } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 
-interface EmailLog {
-  id: string
-  user_email: string | null
-  function_name: string
-  provider: string
+// Lista todos clientes pagantes (subscriptions) com botão pra reenviar email de acesso.
+// Mostra também o último log Resend pra cada um (se houver) — útil pra ver quem já recebeu vs falhou.
+
+interface Row {
+  email: string
+  plan: string | null
   status: string
-  http_status: number | null
+  is_courtesy: boolean
+  created_at: string
+  // Último log Resend pra esse email (opcional)
+  last_email_status: 'success' | 'error' | 'never' | string
+  last_email_at: string | null
+  last_email_error: string | null
+}
+
+interface SubscriptionRow {
+  customer_email: string
+  plan_type: string | null
+  status: string
+  is_courtesy: boolean
+  created_at: string
+}
+
+interface ApiLogRow {
+  user_email: string | null
+  status: string
   error_message: string | null
   created_at: string
 }
 
 export function AdminEmail() {
-  const [logs, setLogs] = useState<EmailLog[]>([])
+  const [rows, setRows] = useState<Row[]>([])
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'error'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'sent' | 'failed' | 'never'>('all')
   const [loading, setLoading] = useState(true)
   const [resending, setResending] = useState<string | null>(null)
 
@@ -25,11 +44,38 @@ export function AdminEmail() {
 
   async function load() {
     setLoading(true)
-    const { data, error } = await supabase.from('api_logs').select('*')
-      .or('provider.eq.resend,function_name.like.*email*,function_name.like.*welcome*')
-      .order('created_at', { ascending: false }).limit(200)
-    if (error) toast.error('Erro: ' + error.message)
-    setLogs((data ?? []) as EmailLog[])
+    const [subsRes, logsRes] = await Promise.all([
+      supabase.from('subscriptions').select('customer_email, plan_type, status, is_courtesy, created_at').order('created_at', { ascending: false }).limit(500),
+      supabase.from('api_logs').select('user_email, status, error_message, created_at').or('provider.eq.resend,function_name.like.%email%,function_name.like.%welcome%').order('created_at', { ascending: false }).limit(500),
+    ])
+    if (subsRes.error) toast.error('Erro ao carregar pagantes: ' + subsRes.error.message)
+
+    const lastByEmail = new Map<string, ApiLogRow>()
+    for (const log of (logsRes.data ?? []) as ApiLogRow[]) {
+      const k = (log.user_email ?? '').toLowerCase()
+      if (!k) continue
+      if (!lastByEmail.has(k)) lastByEmail.set(k, log)
+    }
+
+    const seen = new Set<string>()
+    const out: Row[] = []
+    for (const s of (subsRes.data ?? []) as SubscriptionRow[]) {
+      const email = s.customer_email?.toLowerCase()
+      if (!email || seen.has(email)) continue
+      seen.add(email)
+      const log = lastByEmail.get(email)
+      out.push({
+        email: s.customer_email,
+        plan: s.plan_type,
+        status: s.status,
+        is_courtesy: s.is_courtesy,
+        created_at: s.created_at,
+        last_email_status: log?.status ?? 'never',
+        last_email_at: log?.created_at ?? null,
+        last_email_error: log?.error_message ?? null,
+      })
+    }
+    setRows(out)
     setLoading(false)
   }
 
@@ -38,35 +84,54 @@ export function AdminEmail() {
     const { error } = await supabase.functions.invoke('admin-update-user', { body: { email, action: 'resend_welcome' } })
     setResending(null)
     if (error) toast.error('Falha: ' + error.message)
-    else toast.success(`Reenviado pra ${email}`)
+    else { toast.success(`Reenviado pra ${email}`); load() }
   }
 
-  const filtered = logs.filter(l => {
-    const matchSearch = !search || l.user_email?.toLowerCase().includes(search.toLowerCase())
-    const matchStatus = statusFilter === 'all' || (statusFilter === 'success' ? l.status === 'success' : l.status !== 'success')
+  const filtered = rows.filter(r => {
+    const matchSearch = !search || r.email.toLowerCase().includes(search.toLowerCase())
+    let matchStatus = true
+    if (statusFilter === 'sent') matchStatus = r.last_email_status === 'success'
+    else if (statusFilter === 'failed') matchStatus = r.last_email_status !== 'success' && r.last_email_status !== 'never'
+    else if (statusFilter === 'never') matchStatus = r.last_email_status === 'never'
     return matchSearch && matchStatus
   })
 
   const totals = {
-    sent: logs.filter(l => l.status === 'success').length,
-    failed: logs.filter(l => l.status !== 'success').length,
+    paying: rows.length,
+    sent: rows.filter(r => r.last_email_status === 'success').length,
+    failed: rows.filter(r => r.last_email_status !== 'success' && r.last_email_status !== 'never').length,
+    never: rows.filter(r => r.last_email_status === 'never').length,
   }
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-surface-300 border border-white/5 rounded-xl p-4 flex items-center gap-3">
-          <CheckCircle2 size={20} className="text-green-400" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-surface-300 border border-white/5 rounded-xl p-3 flex items-center gap-2">
+          <Mail size={18} className="text-primary-400" />
           <div>
-            <p className="text-2xl font-bold text-green-400">{totals.sent}</p>
-            <p className="text-[10px] text-white/40">Entregues (últ. 200)</p>
+            <p className="text-lg font-bold text-white">{totals.paying}</p>
+            <p className="text-[10px] text-white/40">Pagantes</p>
           </div>
         </div>
-        <div className="bg-surface-300 border border-white/5 rounded-xl p-4 flex items-center gap-3">
-          <AlertCircle size={20} className="text-red-400" />
+        <div className="bg-surface-300 border border-white/5 rounded-xl p-3 flex items-center gap-2">
+          <CheckCircle2 size={18} className="text-green-400" />
           <div>
-            <p className="text-2xl font-bold text-red-400">{totals.failed}</p>
-            <p className="text-[10px] text-white/40">Falhas (últ. 200)</p>
+            <p className="text-lg font-bold text-green-400">{totals.sent}</p>
+            <p className="text-[10px] text-white/40">Email enviado</p>
+          </div>
+        </div>
+        <div className="bg-surface-300 border border-white/5 rounded-xl p-3 flex items-center gap-2">
+          <AlertCircle size={18} className="text-red-400" />
+          <div>
+            <p className="text-lg font-bold text-red-400">{totals.failed}</p>
+            <p className="text-[10px] text-white/40">Falha no envio</p>
+          </div>
+        </div>
+        <div className="bg-surface-300 border border-white/5 rounded-xl p-3 flex items-center gap-2">
+          <Inbox size={18} className="text-yellow-400" />
+          <div>
+            <p className="text-lg font-bold text-yellow-400">{totals.never}</p>
+            <p className="text-[10px] text-white/40">Nunca enviado</p>
           </div>
         </div>
       </div>
@@ -77,11 +142,12 @@ export function AdminEmail() {
           <input type="text" placeholder="Buscar por email..." value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-surface-300 border border-white/10 rounded-lg text-white placeholder:text-white/20 focus:outline-none focus:border-primary-500" />
         </div>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'all' | 'success' | 'error')}
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as 'all' | 'sent' | 'failed' | 'never')}
           className="px-3 py-2.5 bg-surface-300 border border-white/10 rounded-lg text-white text-sm focus:outline-none">
           <option value="all">Todos</option>
-          <option value="success">Entregues</option>
-          <option value="error">Falhas</option>
+          <option value="sent">Email enviado</option>
+          <option value="failed">Falha</option>
+          <option value="never">Nunca enviado</option>
         </select>
         <button onClick={load} disabled={loading} className="px-3 py-2.5 rounded-lg bg-surface-300 border border-white/10 text-white/60 hover:text-white text-sm cursor-pointer disabled:opacity-50">
           {loading ? <Loader2 size={14} className="animate-spin" /> : 'Atualizar'}
@@ -91,39 +157,37 @@ export function AdminEmail() {
       {loading ? (
         <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-14 bg-surface-300 rounded-xl animate-pulse" />)}</div>
       ) : filtered.length === 0 ? (
-        <p className="text-center text-white/30 py-8">Nenhum email encontrado</p>
+        <p className="text-center text-white/30 py-8">Nenhum cliente encontrado</p>
       ) : (
-        <div className="bg-surface-300 border border-white/5 rounded-xl overflow-hidden">
+        <div className="bg-surface-300 border border-white/5 rounded-xl overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/5 text-white/40 text-xs">
-                <th className="text-left p-3 font-medium">Destinatário</th>
-                <th className="text-left p-3 font-medium">Template</th>
-                <th className="text-center p-3 font-medium">Status</th>
-                <th className="text-left p-3 font-medium">Erro</th>
-                <th className="text-right p-3 font-medium">Data</th>
+                <th className="text-left p-3 font-medium">Cliente</th>
+                <th className="text-left p-3 font-medium">Plano</th>
+                <th className="text-center p-3 font-medium">Email</th>
+                <th className="text-left p-3 font-medium">Erro último</th>
+                <th className="text-right p-3 font-medium">Compra</th>
                 <th className="text-center p-3 font-medium">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(l => (
-                <tr key={l.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                  <td className="p-3 text-white/80 truncate max-w-[200px]"><Mail size={12} className="inline mr-1.5 text-white/30" />{l.user_email ?? '—'}</td>
-                  <td className="p-3 text-primary-400 text-xs">{l.function_name}</td>
+              {filtered.map(r => (
+                <tr key={r.email} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <td className="p-3 text-white/80 truncate max-w-[220px]"><Mail size={12} className="inline mr-1.5 text-white/30" />{r.email}</td>
+                  <td className="p-3 capitalize text-primary-300 text-xs">{r.plan ?? '—'}{r.is_courtesy && ' (cortesia)'}</td>
                   <td className="p-3 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${l.status === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                      {l.status}{l.http_status ? ` (${l.http_status})` : ''}
-                    </span>
+                    {r.last_email_status === 'success' && <span className="px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 text-[10px] font-medium">enviado</span>}
+                    {r.last_email_status === 'never' && <span className="px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 text-[10px] font-medium">nunca enviado</span>}
+                    {r.last_email_status !== 'success' && r.last_email_status !== 'never' && <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[10px] font-medium">falha</span>}
                   </td>
-                  <td className="p-3 text-xs text-red-400/80 truncate max-w-[200px]" title={l.error_message ?? ''}>{l.error_message ?? '—'}</td>
-                  <td className="p-3 text-right text-white/50 text-xs whitespace-nowrap">{new Date(l.created_at).toLocaleString('pt-BR')}</td>
+                  <td className="p-3 text-xs text-red-400/80 truncate max-w-[200px]" title={r.last_email_error ?? ''}>{r.last_email_error ?? '—'}</td>
+                  <td className="p-3 text-right text-white/50 text-xs whitespace-nowrap">{new Date(r.created_at).toLocaleString('pt-BR')}</td>
                   <td className="p-3 text-center">
-                    {l.user_email && (
-                      <button onClick={() => resend(l.user_email!)} disabled={resending === l.user_email}
-                        title="Reenviar email" className="p-1.5 rounded-lg hover:bg-primary-600/20 text-primary-400 disabled:opacity-50 cursor-pointer">
-                        {resending === l.user_email ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />}
-                      </button>
-                    )}
+                    <button onClick={() => resend(r.email)} disabled={resending === r.email}
+                      title="Reenviar email de acesso" className="p-1.5 rounded-lg hover:bg-primary-600/20 text-primary-400 disabled:opacity-50 cursor-pointer">
+                      {resending === r.email ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />}
+                    </button>
                   </td>
                 </tr>
               ))}

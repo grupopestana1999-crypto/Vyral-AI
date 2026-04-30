@@ -63,7 +63,7 @@ export function AdminPagamentos() {
     return matchSearch && matchStatus && matchOrigin
   })
 
-  const statuses = ['all', 'active', 'approved', 'expired', 'cancelled']
+  const statuses = ['all', 'active', 'approved', 'expired', 'cancelled', 'refunded']
 
   // Totais visíveis
   const totalRevenue = filtered.reduce((sum, r) => sum + (r.purchase_price_brl || 0), 0)

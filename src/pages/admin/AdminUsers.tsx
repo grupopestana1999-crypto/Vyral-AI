@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Coins, ChevronRight, Ban, ShieldCheck, Mail, History, Crown, X, Loader2, UserPlus, Radar } from 'lucide-react'
+import { Search, Coins, ChevronRight, Ban, ShieldCheck, Mail, History, Crown, X, Loader2, UserPlus, Radar, Send } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 
@@ -122,6 +122,16 @@ export function AdminUsers() {
     setHistory((data ?? []) as HistoryRow[])
   }
 
+  async function resendWelcome(u: UserRow) {
+    setBusy(true)
+    const { error } = await supabase.functions.invoke('admin-update-user', {
+      body: { user_id: u.id, email: u.email, action: 'resend_welcome' },
+    })
+    setBusy(false)
+    if (error) toast.error('Erro: ' + error.message)
+    else toast.success(`Email de acesso reenviado pra ${u.email}`)
+  }
+
   function openDrawer(u: UserRow) {
     setOpenId(u.id)
     setNewPlan(u.plan_type ?? '')
@@ -228,12 +238,13 @@ export function AdminUsers() {
       ) : (
         <div className="space-y-2">
           {filtered.map(u => (
-            <div key={u.id} className={`bg-surface-300 border rounded-xl p-4 ${u.is_banned ? 'border-red-500/30' : 'border-white/5'}`}>
+            <div key={u.id} className={`bg-surface-300 border rounded-xl p-4 ${u.is_banned || u.status === 'cancelled' || u.status === 'refunded' ? 'border-red-500/30' : 'border-white/5'}`}>
               <div className="flex items-center gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium text-white truncate">{u.email}</p>
                     {u.is_banned && <span className="px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[9px] font-bold">BLOQUEADO</span>}
+                    {!u.is_banned && (u.status === 'cancelled' || u.status === 'refunded') && <span className="px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 text-[9px] font-bold">REEMBOLSADO</span>}
                   </div>
                   <div className="flex items-center gap-3 text-xs text-white/40 mt-1 flex-wrap">
                     <span className="font-mono text-[10px] text-white/30">{u.id.slice(0, 8)}…</span>
@@ -283,6 +294,14 @@ export function AdminUsers() {
                       className="flex-1 px-3 py-2 bg-surface-400 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500" />
                     <button onClick={() => changeEmail(u)} disabled={busy || !newEmail}
                       className="px-3 py-2 rounded-lg bg-primary-600 text-white text-xs font-medium hover:brightness-110 disabled:opacity-50 cursor-pointer">Trocar</button>
+                  </div>
+
+                  {/* Reenviar email de acesso */}
+                  <div>
+                    <button onClick={() => resendWelcome(u)} disabled={busy}
+                      className="w-full px-3 py-2 rounded-lg bg-primary-600/20 text-primary-300 hover:bg-primary-600/30 text-xs font-medium cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50">
+                      {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Reenviar email de acesso
+                    </button>
                   </div>
 
                   {/* Radar de Tarefas */}
