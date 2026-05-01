@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Lock, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -12,36 +12,95 @@ export function ResetPasswordPage() {
   const [state, setState] = useState<State>('verifying')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [debug, setDebug] = useState<string[]>([])
+  const resolvedRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
-    let resolved = false
-
-    async function checkSession() {
-      const { data } = await supabase.auth.getSession()
-      if (cancelled || resolved) return
-      if (data.session?.user) {
-        resolved = true
-        setState('ready')
-      }
+    const log = (msg: string) => setDebug(d => [...d, `[${new Date().toLocaleTimeString()}] ${msg}`])
+    const resolve = (reason: string) => {
+      if (cancelled || resolvedRef.current) return
+      resolvedRef.current = true
+      log('resolved: ' + reason)
+      setState('ready')
     }
 
-    // Listener primário — o link de recovery dispara PASSWORD_RECOVERY ou SIGNED_IN
+    async function init() {
+      const url = new URL(window.location.href)
+      const hash = window.location.hash.replace(/^#/, '')
+      const hashParams = new URLSearchParams(hash)
+      const queryCode = url.searchParams.get('code')
+      const queryError = url.searchParams.get('error_description') || url.searchParams.get('error')
+
+      log('init query=' + (url.search || '∅') + ' hash=' + (hash ? '✓' : '∅'))
+
+      if (queryError) {
+        log('query error: ' + queryError)
+        if (!cancelled) setState('no_session')
+        return
+      }
+
+      // PKCE flow: ?code=...&type=recovery
+      if (queryCode) {
+        log('PKCE: trocando code por session')
+        const { error } = await supabase.auth.exchangeCodeForSession(queryCode)
+        if (cancelled) return
+        if (error) {
+          log('exchange error: ' + error.message)
+          setState('no_session')
+        } else {
+          resolve('exchangeCodeForSession ok')
+        }
+        return
+      }
+
+      // Hash flow: #access_token=...&refresh_token=...&type=recovery
+      const accessToken = hashParams.get('access_token')
+      const refreshToken = hashParams.get('refresh_token')
+      const hashType = hashParams.get('type')
+      if (accessToken && refreshToken) {
+        log('hash flow: setSession (type=' + (hashType || '?') + ')')
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        })
+        if (cancelled) return
+        if (error) {
+          log('setSession error: ' + error.message)
+          setState('no_session')
+        } else {
+          resolve('setSession ok')
+        }
+        return
+      }
+
+      // Sem URL params — pode ser sessão já estabelecida ou recovery via auto-detect
+      const { data } = await supabase.auth.getSession()
+      if (cancelled) return
+      if (data.session?.user) {
+        resolve('getSession existing user=' + data.session.user.email)
+        return
+      }
+      log('aguardando onAuthStateChange…')
+    }
+
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      log('event=' + event + ' user=' + (session?.user?.email ?? '∅'))
       if (cancelled) return
       if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
-        resolved = true
-        setState('ready')
+        resolve('event ' + event)
       }
     })
 
-    // Check imediato (caso a sessão já esteja no localStorage)
-    checkSession()
+    init()
 
-    // Fallback timeout — se em 5s não resolveu, considera link inválido
+    // Fallback timeout — 8s sem resolver vira link inválido
     const timeoutId = setTimeout(() => {
-      if (!cancelled && !resolved) setState('no_session')
-    }, 5000)
+      if (!cancelled && !resolvedRef.current) {
+        log('timeout 8s sem resolver')
+        setState('no_session')
+      }
+    }, 8000)
 
     return () => {
       cancelled = true
@@ -78,7 +137,7 @@ export function ResetPasswordPage() {
             <div className="flex flex-col items-center justify-center gap-3 py-8">
               <Loader2 size={20} className="animate-spin text-primary-400" />
               <p className="text-sm text-white/60">Validando link…</p>
-              <p className="text-[10px] text-white/30">Se demorar mais de 5s, o link expirou.</p>
+              <p className="text-[10px] text-white/30">Se demorar mais de 8s, o link expirou.</p>
             </div>
           )}
 
@@ -91,6 +150,12 @@ export function ResetPasswordPage() {
                 className="w-full py-2.5 rounded-lg bg-primary-600 text-white font-medium hover:brightness-110 transition-all cursor-pointer">
                 Ir pra tela de login
               </button>
+              {debug.length > 0 && (
+                <details className="text-left mt-4">
+                  <summary className="text-[10px] text-white/30 cursor-pointer">Debug ({debug.length})</summary>
+                  <pre className="text-[9px] text-white/40 mt-1 whitespace-pre-wrap break-all">{debug.join('\n')}</pre>
+                </details>
+              )}
             </div>
           )}
 
