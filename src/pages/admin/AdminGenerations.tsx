@@ -14,7 +14,12 @@ export function AdminGenerations() {
 
   async function load() {
     setLoading(true)
-    let q = supabase.from('credit_usage_log').select('*').order('created_at', { ascending: false }).limit(200)
+    // Exclui rows que vieram do webhook Hotmart (PURCHASE_APPROVED etc) e top-ups manuais —
+    // essa aba é só pra gerações de IA reais, não pra log de venda.
+    let q = supabase.from('credit_usage_log').select('*')
+      .not('tool_name', 'in', '("hotmart","credit_topup","welcome_credits","admin_grant","refund")')
+      .not('edge_function', 'eq', 'hotmart-webhook')
+      .order('created_at', { ascending: false }).limit(200)
     if (toolFilter !== 'all') q = q.eq('tool_name', toolFilter)
     const { data } = await q
     setLogs(data ?? [])

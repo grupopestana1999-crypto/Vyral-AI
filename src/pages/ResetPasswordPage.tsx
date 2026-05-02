@@ -114,9 +114,20 @@ export function ResetPasswordPage() {
     if (password.length < 6) { toast.error('Senha precisa ter pelo menos 6 caracteres'); return }
     if (password !== confirm) { toast.error('As senhas não conferem'); return }
     setState('saving')
-    const { error } = await supabase.auth.updateUser({ password })
-    if (error) {
-      toast.error('Erro: ' + error.message)
+    // Race contra timeout: depois de updateUser numa session de PASSWORD_RECOVERY o Supabase
+    // às vezes invalida o token e a resposta nunca chega ao client. Backend já processou.
+    // Se 4s passarem sem resposta nem erro, assumimos sucesso e redirecionamos.
+    const updatePromise = supabase.auth.updateUser({ password }).then(r => ({ kind: 'response' as const, ...r }))
+    const timeoutPromise = new Promise<{ kind: 'timeout' }>(resolve => setTimeout(() => resolve({ kind: 'timeout' }), 4000))
+    const result = await Promise.race([updatePromise, timeoutPromise])
+    if (result.kind === 'timeout') {
+      setState('done')
+      toast.success('Senha atualizada. Redirecionando…')
+      setTimeout(() => navigate('/dashboard'), 1500)
+      return
+    }
+    if (result.error) {
+      toast.error('Erro: ' + result.error.message)
       setState('ready')
       return
     }

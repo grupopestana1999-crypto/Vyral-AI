@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, Coins, ChevronRight, Ban, ShieldCheck, Mail, History, Crown, X, Loader2, UserPlus, Radar, Send } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
@@ -43,9 +43,7 @@ export function AdminUsers() {
   const [createForm, setCreateForm] = useState({ email: '', plan_type: 'starter' as 'starter' | 'creator' | 'pro', credits: 0, send_welcome: true })
   const [creating, setCreating] = useState(false)
 
-  useEffect(() => { load() }, [])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     const [usersRes, unlocksRes] = await Promise.all([
       supabase.rpc('admin_list_users'),
@@ -55,7 +53,24 @@ export function AdminUsers() {
     setRadarUnlocked(new Set((unlocksRes.data ?? []).map((r: { user_email: string }) => r.user_email)))
     setUsers((usersRes.data ?? []) as UserRow[])
     setLoading(false)
-  }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  // Realtime: assina mudanças em subscriptions pra refletir crédito/status sem refresh manual
+  const reloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    const channel = supabase.channel('admin-users-subs-watch')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => {
+        if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current)
+        reloadDebounceRef.current = setTimeout(() => load(), 600)
+      })
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+      if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current)
+    }
+  }, [load])
 
   async function toggleRadar(u: UserRow) {
     const isUnlocked = radarUnlocked.has(u.email)

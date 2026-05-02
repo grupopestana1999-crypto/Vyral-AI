@@ -1,6 +1,6 @@
 export type PlanType = 'starter' | 'creator' | 'pro'
 export type UserRole = 'user' | 'admin' | 'super_admin'
-export type SubscriptionStatus = 'active' | 'approved' | 'expired' | 'cancelled'
+export type SubscriptionStatus = 'active' | 'approved' | 'expired' | 'cancelled' | 'refunded'
 export interface Subscription {
   id: string
   customer_email: string

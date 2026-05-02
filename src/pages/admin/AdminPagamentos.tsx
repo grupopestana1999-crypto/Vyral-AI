@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, CreditCard, Send, Loader2, ExternalLink, Gift } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
@@ -35,15 +35,30 @@ export function AdminPagamentos() {
   const [loading, setLoading] = useState(true)
   const [resending, setResending] = useState<string | null>(null)
 
-  useEffect(() => { load() }, [])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
     const { data, error } = await supabase.from('subscriptions').select('*').order('created_at', { ascending: false }).limit(500)
     if (error) toast.error('Erro: ' + error.message)
     setRows((data ?? []) as SubRow[])
     setLoading(false)
-  }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  // Realtime: assina mudanças em subscriptions (refund/status flip aparece sem refresh)
+  const reloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    const channel = supabase.channel('admin-pagamentos-subs-watch')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => {
+        if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current)
+        reloadDebounceRef.current = setTimeout(() => load(), 600)
+      })
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+      if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current)
+    }
+  }, [load])
 
   async function resend(email: string) {
     setResending(email)
