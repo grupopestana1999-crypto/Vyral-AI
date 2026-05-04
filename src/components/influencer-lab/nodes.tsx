@@ -453,17 +453,12 @@ export function PromptNode({ id, data, selected }: NodeProps) {
     if (!val.trim()) return
     setEnhancing(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token; if (!token) return
-      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/enhance-prompt', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify({ description: val, type: 'video' }),
+      const { data, error } = await supabase.functions.invoke('enhance-prompt', {
+        body: { description: val, type: 'video' },
       })
-      const data = await r.json()
-      if (data?.prompt) {
-        applyCreditsFromResponse(data)
-        setVal(data.prompt.slice(0, 800)); save(data.prompt.slice(0, 800))
-      }
+      if (error || !data?.prompt) return
+      applyCreditsFromResponse(data)
+      setVal(data.prompt.slice(0, 800)); save(data.prompt.slice(0, 800))
     } finally { setEnhancing(false) }
   }
 
