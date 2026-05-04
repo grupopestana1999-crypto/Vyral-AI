@@ -43,31 +43,40 @@ export function AdminUsers() {
   const [createForm, setCreateForm] = useState({ email: '', plan_type: 'starter' as 'starter' | 'creator' | 'pro', credits: 0, send_welcome: true })
   const [creating, setCreating] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  // load() pode rodar em modo "loud" (mostra skeleton — uso manual ou primeiro carregamento)
+  // ou "silent" (atualiza dados sem skeleton — uso pelo realtime ou polling em background).
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     const [usersRes, unlocksRes] = await Promise.all([
       supabase.rpc('admin_list_users'),
       supabase.from('radar_unlocks').select('user_email'),
     ])
-    if (usersRes.error) toast.error('Erro ao carregar usuários: ' + usersRes.error.message)
+    if (usersRes.error && !silent) toast.error('Erro ao carregar usuários: ' + usersRes.error.message)
     setRadarUnlocked(new Set((unlocksRes.data ?? []).map((r: { user_email: string }) => r.user_email)))
     setUsers((usersRes.data ?? []) as UserRow[])
-    setLoading(false)
+    if (!silent) setLoading(false)
   }, [])
 
   useEffect(() => { load() }, [load])
 
-  // Realtime: assina mudanças em subscriptions pra refletir crédito/status sem refresh manual
+  // Realtime: assina mudanças em subscriptions e em credit_usage_log pra refletir crédito/status
+  // em tempo real. Reload silencioso (sem skeleton) pra atualização ser invisível.
   const reloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    const channel = supabase.channel('admin-users-subs-watch')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => {
-        if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current)
-        reloadDebounceRef.current = setTimeout(() => load(), 600)
-      })
+    const triggerReload = () => {
+      if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current)
+      reloadDebounceRef.current = setTimeout(() => load(true), 400)
+    }
+    const channel = supabase.channel('admin-users-watch')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, triggerReload)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'credit_usage_log' }, triggerReload)
       .subscribe()
+    // Polling de fallback a cada 15s — caso o realtime perca conexão (ex: rede instável),
+    // o painel ainda fica fresco. Bem leve (1 RPC).
+    const pollInterval = setInterval(() => load(true), 15_000)
     return () => {
       supabase.removeChannel(channel)
+      clearInterval(pollInterval)
       if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current)
     }
   }, [load])
@@ -191,7 +200,7 @@ export function AdminUsers() {
         <button onClick={() => setCreateOpen(true)} className="px-3 py-2.5 rounded-lg bg-primary-600 text-white text-sm font-medium cursor-pointer hover:brightness-110 flex items-center gap-1.5">
           <UserPlus size={14} /> Criar usuário
         </button>
-        <button onClick={load} disabled={loading} className="px-3 py-2.5 rounded-lg bg-surface-300 border border-white/10 text-white/60 hover:text-white text-sm cursor-pointer disabled:opacity-50">
+        <button onClick={() => load()} disabled={loading} className="px-3 py-2.5 rounded-lg bg-surface-300 border border-white/10 text-white/60 hover:text-white text-sm cursor-pointer disabled:opacity-50">
           {loading ? <Loader2 size={14} className="animate-spin" /> : 'Atualizar'}
         </button>
       </div>

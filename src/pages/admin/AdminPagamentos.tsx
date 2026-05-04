@@ -35,27 +35,29 @@ export function AdminPagamentos() {
   const [loading, setLoading] = useState(true)
   const [resending, setResending] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     const { data, error } = await supabase.from('subscriptions').select('*').order('created_at', { ascending: false }).limit(500)
-    if (error) toast.error('Erro: ' + error.message)
+    if (error && !silent) toast.error('Erro: ' + error.message)
     setRows((data ?? []) as SubRow[])
-    setLoading(false)
+    if (!silent) setLoading(false)
   }, [])
 
   useEffect(() => { load() }, [load])
 
-  // Realtime: assina mudanças em subscriptions (refund/status flip aparece sem refresh)
+  // Realtime + polling fallback: refund/credit flip aparece sem refresh manual.
   const reloadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     const channel = supabase.channel('admin-pagamentos-subs-watch')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'subscriptions' }, () => {
         if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current)
-        reloadDebounceRef.current = setTimeout(() => load(), 600)
+        reloadDebounceRef.current = setTimeout(() => load(true), 400)
       })
       .subscribe()
+    const pollInterval = setInterval(() => load(true), 15_000)
     return () => {
       supabase.removeChannel(channel)
+      clearInterval(pollInterval)
       if (reloadDebounceRef.current) clearTimeout(reloadDebounceRef.current)
     }
   }, [load])
@@ -118,7 +120,7 @@ export function AdminPagamentos() {
           <option value="stripe">Stripe</option>
           <option value="courtesy">Cortesia</option>
         </select>
-        <button onClick={load} disabled={loading} className="px-3 py-2.5 rounded-lg bg-surface-300 border border-white/10 text-white/60 hover:text-white text-sm cursor-pointer disabled:opacity-50">
+        <button onClick={() => load()} disabled={loading} className="px-3 py-2.5 rounded-lg bg-surface-300 border border-white/10 text-white/60 hover:text-white text-sm cursor-pointer disabled:opacity-50">
           {loading ? <Loader2 size={14} className="animate-spin" /> : 'Atualizar'}
         </button>
       </div>
