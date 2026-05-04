@@ -308,6 +308,9 @@ export function StudioPage() {
         body: {
           product_image: productSource,
           avatar_image: selectedAvatar?.image_url ?? uploadedAvatar,
+          // Quando user escolhe aba "Upload" no painel Cena, envia a imagem como ref pra IA
+          // copiar (cenário/ambiente). Sem isso, só o texto descritivo ia, e a IA inventava.
+          scene_image: sceneTab === 'upload' ? uploadedScene : null,
           scene: `${sceneText}${additionalInfo ? ' | ' + additionalInfo : ''}`,
           boost_quality: 2,
           format,

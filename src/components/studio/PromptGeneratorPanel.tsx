@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Sparkles, ChevronDown, Loader2, Copy, Check, Video, Package,
@@ -63,6 +63,19 @@ export function PromptGeneratorPanel({ productName, productImage, resultImage }:
   const [usesLifetime, setUsesLifetime] = useState<{ used: number; limit: number } | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Conta segundos durante geração — Gemini leva 15-30s, sem feedback usuário acha que travou.
+  useEffect(() => {
+    if (loading) {
+      setElapsed(0)
+      timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000)
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [loading])
 
   async function generate() {
     setLoading(true)
@@ -238,7 +251,7 @@ export function PromptGeneratorPanel({ productName, productImage, resultImage }:
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
             {loading
-              ? 'Gerando...'
+              ? `Gerando${elapsed > 0 ? ` (${elapsed}s)` : '...'} — IA pode levar até 30s`
               : `Gerar Prompt${usesLifetime ? ` (${usesLifetime.used}/${usesLifetime.limit} grátis · vida toda)` : ''}`}
           </button>
 
