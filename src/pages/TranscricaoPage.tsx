@@ -8,7 +8,6 @@ import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { calcCredits } from '../types/credits'
 
 const MAX_FILE_BYTES = 100 * 1024 * 1024
-const SUPABASE_URL = 'https://mdueuksfunifyxfqpmdv.supabase.co'
 
 type Mode = 'upload' | 'url'
 
@@ -72,13 +71,21 @@ export function TranscricaoPage() {
         if (!payloadAudioUrl) throw new Error('Não consegui gerar URL pública do upload')
       }
 
-      const r = await fetch(`${SUPABASE_URL}/functions/v1/transcribe-audio`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify({ audio_url: payloadAudioUrl, duration_s: durationToSend }),
-      })
-      const data = await r.json()
-      if (!r.ok || data?.error) { setError(data?.error || `Erro ${r.status}`); return }
+      // Padrão Studio/Edit: invoke() em vez de fetch raw + Promise.race timeout 120s.
+      // Bug reportado: ficava carregando sem fim — fetch raw + sem timeout = hang.
+      // 120s porque transcrição de áudio longo pode demorar mais que outros boosters.
+      const invokePromise = supabase.functions.invoke('transcribe-audio', {
+        body: { audio_url: payloadAudioUrl, duration_s: durationToSend },
+      }).then(r => ({ kind: 'response' as const, ...r }))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 120_000))
+      const result = await Promise.race([invokePromise, timeoutPromise])
+      if (result.kind === 'timeout') {
+        setError('Tempo excedido (120s). Atualize a página (Ctrl+Shift+R) e tente novamente.')
+        return
+      }
+      const { data, error: invokeError } = result
+      if (invokeError) throw invokeError
+      if (data?.error) { setError(data.error); return }
       if (typeof data?.text === 'string') {
         applyCreditsFromResponse(data)
         setResultText(data.text)

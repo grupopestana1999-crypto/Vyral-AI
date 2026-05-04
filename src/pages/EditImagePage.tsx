@@ -80,11 +80,12 @@ export function EditImagePage() {
 
     setGenerating(true); setError(null); setResultUrl(null)
     try {
-      // Padrão usado pelo Studio (que funciona): supabase.functions.invoke() em vez de
-      // fetch() manual. O fetch manual tinha bug em chamadas consecutivas — segunda
-      // chamada ficava pendurada (state/abort controller stuck). invoke() faz a auth
-      // e parse de forma idempotente, sem reaproveitar conexão problemática.
-      const { data, error: invokeError } = await supabase.functions.invoke('edit-image-inpaint', {
+      // Bug reportado: 4ª/5ª geração em sessão longa fica pendurada. Mesma causa do
+      // Studio — invoke() pendura quando JWT precisa refresh interno. Defesa em 2:
+      // 1) getSession() força refresh explícito (falha rápida se token inválido);
+      // 2) Promise.race contra timeout 90s — corta hang com erro claro.
+      await supabase.auth.getSession()
+      const invokePromise = supabase.functions.invoke('edit-image-inpaint', {
         body: {
           image_url: mainImage,
           edit_prompt: editPrompt,
@@ -92,12 +93,16 @@ export function EditImagePage() {
           template_id: template,
           format,
         },
-      })
-      if (invokeError) throw invokeError
-      if (data?.error) {
-        setError(data.error)
+      }).then(r => ({ kind: 'response' as const, ...r }))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const result = await Promise.race([invokePromise, timeoutPromise])
+      if (result.kind === 'timeout') {
+        setError('Tempo excedido (90s). Atualize a página (Ctrl+Shift+R) e tente de novo.')
         return
       }
+      const { data, error: invokeError } = result
+      if (invokeError) throw invokeError
+      if (data?.error) { setError(data.error); return }
       const out = data?.image_url || data?.result
       if (typeof out === 'string' && /^https?:\/\//.test(out)) {
         applyCreditsFromResponse(data)
