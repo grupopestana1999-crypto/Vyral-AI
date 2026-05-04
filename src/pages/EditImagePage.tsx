@@ -79,35 +79,23 @@ export function EditImagePage() {
     if (!editPrompt.trim()) { toast.error('Descreva a edição ou escolha um template'); return }
 
     setGenerating(true); setError(null); setResultUrl(null)
-    // Timeout client-side: edge function tem deadline interno de 80s; damos 100s no client
-    // pra cobrir RTT + parse. Sem isso o fetch ficava pendurado pra sempre se a edge travasse.
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 100_000)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('sessão expirada')
-
-      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/edit-image-inpaint', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify({
+      // Padrão usado pelo Studio (que funciona): supabase.functions.invoke() em vez de
+      // fetch() manual. O fetch manual tinha bug em chamadas consecutivas — segunda
+      // chamada ficava pendurada (state/abort controller stuck). invoke() faz a auth
+      // e parse de forma idempotente, sem reaproveitar conexão problemática.
+      const { data, error: invokeError } = await supabase.functions.invoke('edit-image-inpaint', {
+        body: {
           image_url: mainImage,
           edit_prompt: editPrompt,
-          // Imagens de referência (roupa, cenário, etc) ajudam o modelo a saber QUAL é o alvo
-          // da substituição. Sem isso, ele inventa qualquer coisa baseada só no prompt.
           reference_images: refImages,
-          // template_id ajuda o backend a enriquecer o prompt automaticamente quando ref existe.
           template_id: template,
-          // Não enviar template ID como mask_prompt — é bug. O texto descritivo do template
-          // já vai em edit_prompt. mask_prompt fica reservado pra área específica futura.
           format,
-        }),
-        signal: controller.signal,
+        },
       })
-      const data = await r.json()
-      if (!r.ok || data?.error) {
-        setError(data?.error || `Erro ${r.status}`)
+      if (invokeError) throw invokeError
+      if (data?.error) {
+        setError(data.error)
         return
       }
       const out = data?.image_url || data?.result
@@ -120,9 +108,8 @@ export function EditImagePage() {
       }
     } catch (err) {
       const e = err as Error
-      setError(e.name === 'AbortError' ? 'Tempo excedido (100s). A IA demorou muito — tente novamente.' : e.message)
+      setError(e.message || 'Falha ao editar imagem')
     } finally {
-      clearTimeout(timeoutId)
       setGenerating(false)
     }
   }
