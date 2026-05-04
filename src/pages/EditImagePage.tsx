@@ -14,7 +14,7 @@ const CREDITS = TOOL_CREDITS.edit_image
 const TEMPLATES = [
   { id: 'roupa', label: 'Trocar Roupa', icon: Shirt, prompt: 'Substitua a roupa da pessoa por outra peça moderna, mantendo o estilo casual e o ambiente. Mantenha o rosto e a pose iguais.' },
   { id: 'cenario', label: 'Trocar Cenário', icon: Palette, prompt: 'Substitua o fundo/cenário da imagem por um novo ambiente, mantendo a pessoa e o produto exatamente iguais e bem iluminados.' },
-  { id: 'influencer', label: 'Trocar Influencer', icon: User, prompt: 'Substitua a pessoa por outra(o) influencer com etnia/aparência diferentes, mantendo a roupa, pose e ambiente iguais.' },
+  { id: 'influencer', label: 'Trocar Influencer', icon: User, prompt: 'Substitua o rosto e identidade da pessoa pela pessoa que está nas imagens de referência. Mantenha exatamente a mesma roupa, pose, iluminação e cenário da imagem principal.' },
   { id: 'pose', label: 'Trocar Pose', icon: MoveDiagonal, prompt: 'Mude a pose da pessoa pra uma posição mais natural e dinâmica, mantendo o rosto, roupa e cenário iguais.' },
 ] as const
 
