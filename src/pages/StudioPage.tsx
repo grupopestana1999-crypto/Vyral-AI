@@ -304,12 +304,16 @@ export function StudioPage() {
     const styleName = STYLES.find(s => s.id === style)?.name
 
     try {
-      const { data, error } = await supabase.functions.invoke('generate-influencer-image', {
+      // Bug reportado: 2ª geração consecutiva fica em "generating" pra sempre.
+      // Causa provável: supabase-js refresh JWT internamente em invoke() pode pendurar
+      // se a sessão estiver stale. Solução defensiva:
+      // (1) força getSession() antes (refresh explícito, falha rápida se inválido)
+      // (2) Promise.race contra timeout 90s — corta hang com erro claro pro user.
+      await supabase.auth.getSession()
+      const invokePromise = supabase.functions.invoke('generate-influencer-image', {
         body: {
           product_image: productSource,
           avatar_image: selectedAvatar?.image_url ?? uploadedAvatar,
-          // Quando user escolhe aba "Upload" no painel Cena, envia a imagem como ref pra IA
-          // copiar (cenário/ambiente). Sem isso, só o texto descritivo ia, e a IA inventava.
           scene_image: sceneTab === 'upload' ? uploadedScene : null,
           scene: `${sceneText}${additionalInfo ? ' | ' + additionalInfo : ''}`,
           boost_quality: 2,
@@ -319,8 +323,16 @@ export function StudioPage() {
           enhancements: enhancementList,
           user_email: user?.email,
         },
-      })
+      }).then(r => ({ kind: 'response' as const, ...r }))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const result = await Promise.race([invokePromise, timeoutPromise])
 
+      if (result.kind === 'timeout') {
+        setSession(s => ({ ...s, status: 'error', errorMessage: 'Tempo excedido (90s). Atualize a página e tente novamente.' }))
+        toast.error('Tempo excedido. Atualize a página.')
+        return
+      }
+      const { data, error } = result
       if (error) throw error
       if (data?.error) {
         setSession(s => ({ ...s, status: 'error', errorMessage: data.error }))

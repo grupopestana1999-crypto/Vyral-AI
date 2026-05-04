@@ -95,9 +95,17 @@ export function PromptGeneratorPanel({ productName, productImage, resultImage }:
         resultImage ? `Imagem da influencer já gerada: ${resultImage}` : '',
       ].filter(Boolean).join('\n')
 
-      const { data, error } = await supabase.functions.invoke('enhance-prompt', {
+      // Bug reportado: prompt fica "Gerando 124s" sem fim. Causa: invoke() pendura
+      // se sessão JWT estiver stale e refresh interno do supabase-js travar.
+      // Defesa: getSession() força refresh com falha rápida + Promise.race timeout 60s.
+      await supabase.auth.getSession()
+      const invokePromise = supabase.functions.invoke('enhance-prompt', {
         body: { description, type: 'video', style: videoStyle, duration: '10' },
-      })
+      }).then(r => ({ kind: 'response' as const, ...r }))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 60_000))
+      const result = await Promise.race([invokePromise, timeoutPromise])
+      if (result.kind === 'timeout') throw new Error('Tempo excedido (60s). Atualize a página e tente novamente.')
+      const { data, error } = result
       if (error) throw new Error(error.message)
       if (data?.error) throw new Error(data.error)
       if (data?.prompt) {
