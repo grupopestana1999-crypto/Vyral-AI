@@ -94,6 +94,11 @@ export function EditImagePage() {
         body: JSON.stringify({
           image_url: mainImage,
           edit_prompt: editPrompt,
+          // Imagens de referência (roupa, cenário, etc) ajudam o modelo a saber QUAL é o alvo
+          // da substituição. Sem isso, ele inventa qualquer coisa baseada só no prompt.
+          reference_images: refImages,
+          // template_id ajuda o backend a enriquecer o prompt automaticamente quando ref existe.
+          template_id: template,
           // Não enviar template ID como mask_prompt — é bug. O texto descritivo do template
           // já vai em edit_prompt. mask_prompt fica reservado pra área específica futura.
           format,
