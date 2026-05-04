@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Loader2, Upload, Sparkles, Wand2 } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
@@ -29,6 +29,18 @@ export function VideosIaPage() {
   const [duration, setDuration] = useState<number>(DEFAULT_DURATION)
   const [generating, setGenerating] = useState(false)
   const [enhancing, setEnhancing] = useState(false)
+  const [enhanceElapsed, setEnhanceElapsed] = useState(0)
+  const enhanceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    if (enhancing) {
+      setEnhanceElapsed(0)
+      enhanceTimerRef.current = setInterval(() => setEnhanceElapsed(s => s + 1), 1000)
+    } else {
+      if (enhanceTimerRef.current) clearInterval(enhanceTimerRef.current)
+    }
+    return () => { if (enhanceTimerRef.current) clearInterval(enhanceTimerRef.current) }
+  }, [enhancing])
 
   const cost = calcCredits('grok_video', { duration_s: duration })
   const insufficient = credits < cost
@@ -50,19 +62,12 @@ export function VideosIaPage() {
     if (!prompt.trim()) { toast.error('Escreva algo no prompt primeiro'); return }
     setEnhancing(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('sessão expirada')
-      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/enhance-prompt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify({ description: prompt, type: 'video' }),
+      // invoke() em vez de fetch raw — fix do bug "carrega sem fim".
+      const { data, error } = await supabase.functions.invoke('enhance-prompt', {
+        body: { description: prompt, type: 'video' },
       })
-      const data = await r.json()
-      if (!r.ok || data?.error) {
-        toast.error(data?.error || `Erro ${r.status}`)
-        return
-      }
+      if (error) throw new Error(error.message)
+      if (data?.error) { toast.error(data.error); return }
       if (typeof data?.prompt === 'string') {
         applyCreditsFromResponse(data)
         setPrompt(data.prompt.slice(0, MAX_PROMPT))
@@ -165,7 +170,7 @@ export function VideosIaPage() {
                   className="absolute right-2 bottom-2 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neon text-surface-500 text-[11px] font-bold hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {enhancing ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
-                  Melhorar
+                  {enhancing ? `Gerando ${enhanceElapsed}s` : 'Melhorar'}
                 </button>
               </div>
             </div>

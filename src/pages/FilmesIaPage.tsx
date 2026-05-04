@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Loader2, Upload, Sparkles, Wand2, Volume2, VolumeX, Image as ImageIcon } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
@@ -38,6 +38,20 @@ export function FilmesIaPage() {
   const [duration, setDuration] = useState(DEFAULT_DURATION)
   const [generating, setGenerating] = useState(false)
   const [enhancing, setEnhancing] = useState(false)
+  const [enhanceElapsed, setEnhanceElapsed] = useState(0)
+  const enhanceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Conta segundos durante "Melhorar Prompt" — Gemini leva 15-30s, sem feedback
+  // o usuário acha que travou. Mesmo padrão do PromptGeneratorPanel do Studio.
+  useEffect(() => {
+    if (enhancing) {
+      setEnhanceElapsed(0)
+      enhanceTimerRef.current = setInterval(() => setEnhanceElapsed(s => s + 1), 1000)
+    } else {
+      if (enhanceTimerRef.current) clearInterval(enhanceTimerRef.current)
+    }
+    return () => { if (enhanceTimerRef.current) clearInterval(enhanceTimerRef.current) }
+  }, [enhancing])
 
   const cost = calcCredits('kling_3', { duration_s: duration, audio })
   const insufficient = credits < cost
@@ -61,16 +75,13 @@ export function FilmesIaPage() {
     if (!prompt.trim()) { toast.error('Escreva algo no prompt primeiro'); return }
     setEnhancing(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('sessão expirada')
-      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/enhance-prompt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify({ description: prompt, type: 'video' }),
+      // Padrão do PromptGeneratorPanel/EditImagePage: invoke() em vez de fetch raw —
+      // resolve o issue de "carrega sem fim" reportado pelo cliente.
+      const { data, error } = await supabase.functions.invoke('enhance-prompt', {
+        body: { description: prompt, type: 'video' },
       })
-      const data = await r.json()
-      if (!r.ok || data?.error) { toast.error(data?.error || `Erro ${r.status}`); return }
+      if (error) throw new Error(error.message)
+      if (data?.error) { toast.error(data.error); return }
       if (typeof data?.prompt === 'string') {
         applyCreditsFromResponse(data)
         setPrompt(data.prompt.slice(0, MAX_PROMPT))
@@ -161,7 +172,7 @@ export function FilmesIaPage() {
                 />
                 <button onClick={enhancePrompt} disabled={enhancing || !prompt.trim()} className="absolute right-2 bottom-2 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neon text-surface-500 text-[11px] font-bold hover:brightness-110 transition-all disabled:opacity-50 cursor-pointer">
                   {enhancing ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />}
-                  Melhorar
+                  {enhancing ? `Gerando ${enhanceElapsed}s` : 'Melhorar'}
                 </button>
               </div>
             </div>
