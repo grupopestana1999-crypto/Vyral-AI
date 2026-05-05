@@ -9,8 +9,7 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {})
-  })
-}
+// Service Worker removido (E23). App nunca foi PWA. SW antigo cacheava bundle
+// JS, fazendo deploys novos não chegarem ao cliente sem hard refresh manual.
+// public/sw.js virou auto-destruct — clientes que ainda têm SW v1 instalado
+// vão limpar na próxima visita e nunca mais re-registrar.
