@@ -91,17 +91,16 @@ export function ClonagemVozPage() {
 
     setGenerating(true); setResultAudio(null)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('sessão expirada')
-
-      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/text-to-speech', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify({ text, voice_id: selectedVoiceId }),
-      })
-      const data = await r.json()
-      if (!r.ok || data?.error) { toast.error(data?.error || `Erro ${r.status}`); return }
+      // invoke + Promise.race timeout 90s — fix bug invoke-pendurado
+      const invokePromise = supabase.functions.invoke('text-to-speech', {
+        body: { text, voice_id: selectedVoiceId },
+      }).then(r => ({ kind: 'response' as const, ...r }))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const result = await Promise.race([invokePromise, timeoutPromise])
+      if (result.kind === 'timeout') { toast.error('Tempo excedido (90s). Atualize a página e tente novamente.'); return }
+      const { data, error: invokeError } = result
+      if (invokeError) throw invokeError
+      if (data?.error) { toast.error(data.error); return }
       if (data?.audio_url) {
         applyCreditsFromResponse(data)
         setResultAudio(data.audio_url)

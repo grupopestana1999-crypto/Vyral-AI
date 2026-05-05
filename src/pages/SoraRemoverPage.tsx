@@ -37,17 +37,16 @@ export function SoraRemoverPage() {
 
     setGenerating(true); setError(null); setResultUrl(null)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('sessão expirada')
-
-      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/sora-watermark-remover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify({ video_url: url }),
-      })
-      const data = await r.json()
-      if (!r.ok || data?.error) { setError(data?.error || `Erro ${r.status}`); return }
+      // invoke + Promise.race timeout 90s — fix bug invoke-pendurado
+      const invokePromise = supabase.functions.invoke('sora-watermark-remover', {
+        body: { video_url: url },
+      }).then(r => ({ kind: 'response' as const, ...r }))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const result = await Promise.race([invokePromise, timeoutPromise])
+      if (result.kind === 'timeout') { setError('Tempo excedido (90s). Atualize a página e tente novamente.'); return }
+      const { data, error: invokeError } = result
+      if (invokeError) throw invokeError
+      if (data?.error) { setError(data.error); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
         toast.success('Processando — acompanhe na aba Histórico')

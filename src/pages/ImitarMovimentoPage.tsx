@@ -144,19 +144,22 @@ export function ImitarMovimentoPage() {
         videoUrlForEdge = referenceVideo
       }
 
-      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/generate-motion-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify({
+      // invoke + Promise.race timeout 90s — fix bug invoke-pendurado
+      const invokePromise = supabase.functions.invoke('generate-motion-video', {
+        body: {
           image_url: characterImage,
           reference_video_url: videoUrlForEdge,
           motion_prompt: prompt,
           quality,
           duration_s: duration,
-        }),
-      })
-      const data = await r.json()
-      if (!r.ok || data?.error) { toast.error(data?.error || `Erro ${r.status}`); return }
+        },
+      }).then(r => ({ kind: 'response' as const, ...r }))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const result = await Promise.race([invokePromise, timeoutPromise])
+      if (result.kind === 'timeout') { toast.error('Tempo excedido (90s). Atualize a página e tente novamente.'); return }
+      const { data, error: invokeError } = result
+      if (invokeError) throw invokeError
+      if (data?.error) { toast.error(data.error); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
         toast.success('Vídeo entrou na fila — acompanhe na aba Histórico')

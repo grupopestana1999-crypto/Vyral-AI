@@ -67,19 +67,18 @@ export function AvatarVideosPage() {
 
     setGenerating(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('sessão expirada')
-
       const prompt = `Avatar realista falando o seguinte texto em português brasileiro com sincronização labial perfeita: "${text.trim()}". Movimentos naturais e expressões faciais autênticas. Sem texto na tela.`
 
-      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/generate-veo-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify({ prompt, image_url: avatarSrc, mode }),
-      })
-      const data = await r.json()
-      if (!r.ok || data?.error) { toast.error(data?.error || `Erro ${r.status}`); return }
+      // invoke + Promise.race timeout 90s — fix bug invoke-pendurado
+      const invokePromise = supabase.functions.invoke('generate-veo-video', {
+        body: { prompt, image_url: avatarSrc, mode },
+      }).then(r => ({ kind: 'response' as const, ...r }))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const result = await Promise.race([invokePromise, timeoutPromise])
+      if (result.kind === 'timeout') { toast.error('Tempo excedido (90s). Atualize a página e tente novamente.'); return }
+      const { data, error: invokeError } = result
+      if (invokeError) throw invokeError
+      if (data?.error) { toast.error(data.error); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
         toast.success('Avatar entrou na fila — acompanhe na aba Histórico')

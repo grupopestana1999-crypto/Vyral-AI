@@ -38,21 +38,23 @@ export function PeleUltraPage() {
     if (insufficient) { toast.error(`Créditos insuficientes (precisa ${CREDITS})`); return }
 
     setGenerating(true); setError(null); setResultUrl(null)
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 100_000)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('sessão expirada')
-
-      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/skin-enhancer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify({ image_url: imageUrl }),
-        signal: controller.signal,
-      })
-      const data = await r.json()
-      if (!r.ok || data?.error) { setError(data?.error || `Erro ${r.status}`); return }
+      // Mesmo padrão de defesa do Studio/Edit (commits anteriores): supabase.functions.invoke
+      // em vez de fetch raw + getSession() força refresh do JWT + Promise.race vs timeout 90s.
+      // Bug reportado: ficava carregando sem fim — invoke pendura quando JWT está stale.
+      await supabase.auth.getSession()
+      const invokePromise = supabase.functions.invoke('skin-enhancer', {
+        body: { image_url: imageUrl },
+      }).then(r => ({ kind: 'response' as const, ...r }))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const result = await Promise.race([invokePromise, timeoutPromise])
+      if (result.kind === 'timeout') {
+        setError('Tempo excedido (90s). Atualize a página (Ctrl+Shift+R) e tente novamente.')
+        return
+      }
+      const { data, error: invokeError } = result
+      if (invokeError) throw invokeError
+      if (data?.error) { setError(data.error); return }
       if (typeof data?.image_url === 'string' && /^https?:\/\//.test(data.image_url)) {
         applyCreditsFromResponse(data)
         setResultUrl(data.image_url)
@@ -65,9 +67,8 @@ export function PeleUltraPage() {
       }
     } catch (err) {
       const e = err as Error
-      setError(e.name === 'AbortError' ? 'Tempo excedido. Tente novamente.' : e.message)
+      setError(e.message || 'Falha ao aprimorar pele')
     } finally {
-      clearTimeout(timeoutId)
       setGenerating(false)
     }
   }

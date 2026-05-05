@@ -197,9 +197,9 @@ function InfluencerLabInner() {
     setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'generating', errorMessage: undefined } } : n))
 
     try {
+      // getSession força refresh JWT antes do invoke (bug fix invoke-pendurado)
       const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('sessão expirada')
+      if (!session?.access_token) throw new Error('sessão expirada')
 
       let endpoint = ''
       let payload: Record<string, unknown> = {}
@@ -277,13 +277,15 @@ function InfluencerLabInner() {
         }
       }
 
-      const r = await fetch(`https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify(payload),
-      })
-      const data = await r.json()
-      if (!r.ok || data?.error) throw new Error(data?.error || `Erro ${r.status}`)
+      // invoke + Promise.race timeout 90s — fix bug invoke-pendurado
+      const invokePromise = supabase.functions.invoke(endpoint, { body: payload })
+        .then(r => ({ kind: 'response' as const, ...r }))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const result = await Promise.race([invokePromise, timeoutPromise])
+      if (result.kind === 'timeout') throw new Error('Tempo excedido (90s). Atualize a página e tente novamente.')
+      const { data, error: invokeError } = result
+      if (invokeError) throw invokeError
+      if (data?.error) throw new Error(data.error)
 
       // Script node retorna texto puro (data.prompt). Outros retornam image_url ou task_id.
       if (node.type === 'script' && typeof data?.prompt === 'string') {
