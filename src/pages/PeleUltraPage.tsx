@@ -39,10 +39,10 @@ export function PeleUltraPage() {
 
     setGenerating(true); setError(null); setResultUrl(null)
     try {
-      // Mesmo padrão de defesa do Studio/Edit (commits anteriores): supabase.functions.invoke
-      // em vez de fetch raw + getSession() força refresh do JWT + Promise.race vs timeout 90s.
-      // Bug reportado: ficava carregando sem fim — invoke pendura quando JWT está stale.
-      await supabase.auth.getSession()
+      // E24: removido `await supabase.auth.getSession()` defensivo — era patch que
+      // virou parte do bug "carregando sem fim". O await travava aqui quando o
+      // auto-refresh interno do client estava pendurado. supabase-js já anexa
+      // bearer automaticamente. Promise.race 90s abaixo cobre hang real do invoke.
       const invokePromise = supabase.functions.invoke('skin-enhancer', {
         body: { image_url: imageUrl },
       }).then(r => ({ kind: 'response' as const, ...r }))

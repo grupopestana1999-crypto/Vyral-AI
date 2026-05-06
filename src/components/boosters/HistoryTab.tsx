@@ -55,15 +55,13 @@ export function HistoryTab({ tool, mediaType = 'video' }: Props) {
     if (pending.length === 0) return
     setRefreshing(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) return
+      // E24: migrado de fetch raw + Authorization manual pra supabase.functions.invoke().
+      // fetch raw sem AbortController travava polling em sessões longas e empilhava
+      // requests pendurados que sufocavam o websocket compartilhado do client.
       await Promise.all(pending.map(async (it) => {
         try {
-          await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/check-kie-task', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-            body: JSON.stringify({ task_id: it.external_task_id, tool_name: tool }),
+          await supabase.functions.invoke('check-kie-task', {
+            body: { task_id: it.external_task_id, tool_name: tool },
           })
         } catch { /* silent */ }
       }))

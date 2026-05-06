@@ -19,6 +19,7 @@ interface AuthState {
 }
 
 let subscriptionChannel: RealtimeChannel | null = null
+let currentSubscribedEmail: string | null = null
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
@@ -107,8 +108,12 @@ async function fetchSubscription(email: string): Promise<Subscription | null> {
 }
 
 function subscribeToSubscriptionChanges(email: string, set: (partial: Partial<AuthState>) => void) {
-  unsubscribeFromSubscriptionChanges()
   const normalized = email.toLowerCase()
+  // Idempotente: TOKEN_REFRESHED dispara onAuthStateChange a cada ~50min e antes
+  // recriava o channel — churn no websocket compartilhado deixava invokes pendurando.
+  if (subscriptionChannel && currentSubscribedEmail === normalized) return
+  unsubscribeFromSubscriptionChanges()
+  currentSubscribedEmail = normalized
   subscriptionChannel = supabase
     .channel(`subscription-${normalized}`)
     .on(
@@ -117,7 +122,6 @@ function subscribeToSubscriptionChanges(email: string, set: (partial: Partial<Au
       (payload) => {
         const next = payload.new as Subscription
         if (next) {
-          // Atualiza sempre — inclusive cancelled/refunded pra ProtectedRoute reagir em tempo real
           set({ subscription: next })
         }
       }
@@ -129,5 +133,6 @@ function unsubscribeFromSubscriptionChanges() {
   if (subscriptionChannel) {
     supabase.removeChannel(subscriptionChannel)
     subscriptionChannel = null
+    currentSubscribedEmail = null
   }
 }

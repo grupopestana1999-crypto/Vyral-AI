@@ -80,11 +80,10 @@ export function EditImagePage() {
 
     setGenerating(true); setError(null); setResultUrl(null)
     try {
-      // Bug reportado: 4ª/5ª geração em sessão longa fica pendurada. Mesma causa do
-      // Studio — invoke() pendura quando JWT precisa refresh interno. Defesa em 2:
-      // 1) getSession() força refresh explícito (falha rápida se token inválido);
-      // 2) Promise.race contra timeout 90s — corta hang com erro claro.
-      await supabase.auth.getSession()
+      // E24: removido `await supabase.auth.getSession()` defensivo — era patch que
+      // virou parte do bug. Quando o auto-refresh interno do client estava pendurado,
+      // esse await travava o frontend antes do invoke disparar. supabase-js já anexa
+      // bearer automaticamente. Promise.race 90s abaixo cobre hang real do invoke.
       const invokePromise = supabase.functions.invoke('edit-image-inpaint', {
         body: {
           image_url: mainImage,

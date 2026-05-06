@@ -100,9 +100,9 @@ export function FilmesIaPage() {
 
     setGenerating(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('sessão expirada')
+      // E24: migrado de fetch raw + getSession + Authorization manual pra invoke().
+      // fetch raw sem timeout travava em sessões longas. invoke + Promise.race 90s
+      // dá comportamento consistente com Pele/Avatar/Edit (todas funcionam).
       const body: Record<string, unknown> = {
         prompt,
         audio,
@@ -112,13 +112,17 @@ export function FilmesIaPage() {
       if (imageInitial) body.image_url = imageInitial
       if (imageTail) body.image_tail_url = imageTail
 
-      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/generate-kling3-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify(body),
-      })
-      const data = await r.json()
-      if (!r.ok || data?.error) { toast.error(data?.error || `Erro ${r.status}`); return }
+      const invokePromise = supabase.functions.invoke('generate-kling3-video', { body })
+        .then(r => ({ kind: 'response' as const, ...r }))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const result = await Promise.race([invokePromise, timeoutPromise])
+      if (result.kind === 'timeout') {
+        toast.error('Tempo excedido (90s). Atualize a página (Ctrl+Shift+R) e tente novamente.')
+        return
+      }
+      const { data, error: invokeError } = result
+      if (invokeError) throw invokeError
+      if (data?.error) { toast.error(data.error); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
         toast.success('Vídeo entrou na fila — acompanhe na aba Histórico')

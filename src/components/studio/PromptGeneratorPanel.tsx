@@ -95,10 +95,10 @@ export function PromptGeneratorPanel({ productName, productImage, resultImage }:
         resultImage ? `Imagem da influencer já gerada: ${resultImage}` : '',
       ].filter(Boolean).join('\n')
 
-      // Bug reportado: prompt fica "Gerando 124s" sem fim. Causa: invoke() pendura
-      // se sessão JWT estiver stale e refresh interno do supabase-js travar.
-      // Defesa: getSession() força refresh com falha rápida + Promise.race timeout 60s.
-      await supabase.auth.getSession()
+      // E24: removido `await supabase.auth.getSession()` defensivo. Era patch que
+      // virou parte do bug — o await travava aqui quando o auto-refresh interno do
+      // client estava pendurado. supabase-js já anexa bearer automaticamente.
+      // Promise.race 60s abaixo cobre hang real do invoke.
       const invokePromise = supabase.functions.invoke('enhance-prompt', {
         body: { description, type: 'video', style: videoStyle, duration: '10' },
       }).then(r => ({ kind: 'response' as const, ...r }))

@@ -304,12 +304,11 @@ export function StudioPage() {
     const styleName = STYLES.find(s => s.id === style)?.name
 
     try {
-      // Bug reportado: 2ª geração consecutiva fica em "generating" pra sempre.
-      // Causa provável: supabase-js refresh JWT internamente em invoke() pode pendurar
-      // se a sessão estiver stale. Solução defensiva:
-      // (1) força getSession() antes (refresh explícito, falha rápida se inválido)
-      // (2) Promise.race contra timeout 90s — corta hang com erro claro pro user.
-      await supabase.auth.getSession()
+      // E24: removido `await supabase.auth.getSession()` defensivo. Era patch contra
+      // hipótese antiga de refresh JWT, mas virou parte do bug — o await travava
+      // aqui quando o auto-refresh interno do client estava pendurado, repassando
+      // o "carregando sem fim" pro usuário. supabase-js já anexa bearer
+      // automaticamente. Promise.race 90s abaixo cobre hang real do invoke.
       const invokePromise = supabase.functions.invoke('generate-influencer-image', {
         body: {
           product_image: productSource,

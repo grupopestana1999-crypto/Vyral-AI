@@ -105,9 +105,10 @@ export function AvatarCreatorPage() {
 
     setGenerating(true); setError(null); setResultUrl(null)
     try {
-      // Padrão Studio/Edit: invoke + getSession + Promise.race timeout 90s.
-      // Bug invoke-pendurado: fetch raw com AbortController travava em sessões longas.
-      await supabase.auth.getSession()
+      // E24: removido `await supabase.auth.getSession()` defensivo. supabase-js já
+      // anexa o bearer token automaticamente em invoke(). O await explícito travava
+      // o frontend quando o auto-refresh interno do client estava pendurado, o que
+      // explicava o "carregando sem fim" relatado mesmo com Promise.race depois.
       const invokePromise = supabase.functions.invoke('avatar-creator', {
         body: { image_url: imageUrl, category, variant },
       }).then(r => ({ kind: 'response' as const, ...r }))

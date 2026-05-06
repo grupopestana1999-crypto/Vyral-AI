@@ -82,19 +82,21 @@ export function GrokPage() {
 
     setGenerating(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('sessão expirada')
-      const r = await fetch('https://mdueuksfunifyxfqpmdv.supabase.co/functions/v1/generate-grok-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'apikey': token },
-        body: JSON.stringify({ prompt, image_url: imageUrl }),
-      })
-      const data = await r.json()
-      if (!r.ok || data?.error) {
-        toast.error(data?.error || `Erro ${r.status}`)
+      // E24: migrado de fetch raw + getSession + Authorization manual pra invoke().
+      // fetch raw sem timeout travava em sessões longas — mesmo padrão que quebrou
+      // FilmesIaPage e VideosIaPage. invoke() + Promise.race 90s = consistente.
+      const invokePromise = supabase.functions.invoke('generate-grok-video', {
+        body: { prompt, image_url: imageUrl },
+      }).then(r => ({ kind: 'response' as const, ...r }))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const result = await Promise.race([invokePromise, timeoutPromise])
+      if (result.kind === 'timeout') {
+        toast.error('Tempo excedido (90s). Atualize a página (Ctrl+Shift+R) e tente novamente.')
         return
       }
+      const { data, error: invokeError } = result
+      if (invokeError) throw invokeError
+      if (data?.error) { toast.error(data.error); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
         toast.success('Vídeo entrou na fila — acompanhe na aba Histórico')
