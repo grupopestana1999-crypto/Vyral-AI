@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Loader2, Upload, Sparkles, Download, Image as ImageIcon, Sliders, CheckCircle2 } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
@@ -83,9 +83,48 @@ export function AvatarCreatorPage() {
   const [generating, setGenerating] = useState(false)
   const [resultUrl, setResultUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // E27: nano-banana-pro com image_urls (edit mode) leva 90-120s, ultrapassa o
+  // KIE_POLL_TIMEOUT_MS (80s) da edge function. Quando volta task_id pending,
+  // poll client-side a cada 5s até completar — evita "Processando..." sem feedback.
+  const [pendingTask, setPendingTask] = useState<{ taskId: string; startedAt: number } | null>(null)
+  const [elapsedS, setElapsedS] = useState(0)
 
   const insufficient = credits < CREDITS
   const currentVariants = CATEGORIES.find(c => c.id === category)?.variants ?? []
+
+  // Polling Kie quando edge function retornou task_id pending
+  useEffect(() => {
+    if (!pendingTask) return
+    let cancelled = false
+    const tick = setInterval(() => {
+      if (!cancelled) setElapsedS(Math.floor((Date.now() - pendingTask.startedAt) / 1000))
+    }, 1000)
+    async function poll() {
+      if (cancelled) return
+      try {
+        const { data, error } = await supabase.functions.invoke('check-kie-task', {
+          body: { task_id: pendingTask!.taskId, tool_name: 'avatar_creator' },
+        })
+        if (cancelled) return
+        if (error) return
+        if (data?.status === 'success' && typeof data?.result_url === 'string') {
+          setResultUrl(data.result_url)
+          setPendingTask(null)
+          toast.success('Avatar gerado!')
+        } else if (data?.status === 'failed') {
+          setError(data.error || 'Geração falhou na Kie')
+          setPendingTask(null)
+        }
+      } catch { /* silent */ }
+    }
+    poll()
+    const pollInterval = setInterval(poll, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(tick)
+      clearInterval(pollInterval)
+    }
+  }, [pendingTask])
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -127,7 +166,8 @@ export function AvatarCreatorPage() {
         toast.success('Avatar gerado!')
       } else if (data?.task_id) {
         applyCreditsFromResponse(data)
-        toast.message('Processando — pode levar uns segundos. Atualize em instantes.')
+        setPendingTask({ taskId: data.task_id, startedAt: Date.now() })
+        setElapsedS(0)
       } else {
         setError('Resposta inesperada da IA. Tente novamente.')
       }
@@ -226,14 +266,24 @@ export function AvatarCreatorPage() {
 
           <button
             onClick={handleGenerate}
-            disabled={generating || insufficient || !imageUrl || !variant}
+            disabled={generating || !!pendingTask || insufficient || !imageUrl || !variant}
             className="w-full py-3 rounded-xl bg-neon text-surface-500 font-bold text-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
           >
-            {generating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {generating ? 'Gerando…' : `Gerar — ${CREDITS} cr`}
+            {generating || pendingTask ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            {generating ? 'Enviando…' : pendingTask ? 'Aguardando IA…' : `Gerar — ${CREDITS} cr`}
           </button>
 
           <p className="text-[11px] text-white/40 text-center">Saldo: <span className="text-neon font-semibold">{credits}</span> créditos</p>
+
+          {pendingTask && (
+            <div className="bg-surface-400 border border-white/10 rounded-lg p-3 flex items-center gap-3">
+              <Loader2 size={18} className="animate-spin text-primary-400 shrink-0" />
+              <div className="flex-1">
+                <p className="text-xs text-white font-medium">Gerando avatar…</p>
+                <p className="text-[10px] text-white/50">{Math.floor(elapsedS / 60)}:{String(elapsedS % 60).padStart(2, '0')} · pode levar 1-2min</p>
+              </div>
+            </div>
+          )}
 
           {error && <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-xs text-red-300">{error}</div>}
         </div>
