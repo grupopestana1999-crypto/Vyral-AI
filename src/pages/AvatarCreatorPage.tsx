@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { resizeImageFile } from '../lib/imageUtils'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { TOOL_CREDITS } from '../types/credits'
+import { logEvent } from '../lib/clientDiagnostic'
 
 const CREDITS = TOOL_CREDITS.avatar_creator
 
@@ -92,6 +93,17 @@ export function AvatarCreatorPage() {
   const insufficient = credits < CREDITS
   const currentVariants = CATEGORIES.find(c => c.id === category)?.variants ?? []
 
+  // E29: snapshot pra debug bug "2ª trava"
+  useEffect(() => {
+    logEvent('page_mount', 'avatar-creator', {
+      sw_active: !!navigator.serviceWorker?.controller,
+      sw_registered: !!navigator.serviceWorker,
+      online: navigator.onLine,
+      hasAuth: !!localStorage.getItem('sb-mdueuksfunifyxfqpmdv-auth-token'),
+      lsKeys: Object.keys(localStorage).filter(k => k.includes('vyral') || k.includes('sb-')).length,
+    })
+  }, [])
+
   // Polling Kie quando edge function retornou task_id pending
   useEffect(() => {
     if (!pendingTask) return
@@ -138,12 +150,28 @@ export function AvatarCreatorPage() {
   }
 
   async function handleGenerate() {
-    if (!imageUrl) { toast.error('Suba uma imagem de referência'); return }
-    if (!variant) { toast.error(`Selecione uma variante de ${category}`); return }
-    if (insufficient) { toast.error(`Créditos insuficientes (precisa ${CREDITS})`); return }
+    const tStart = Date.now()
+    logEvent('click_received', 'avatar-creator', {
+      hasImage: !!imageUrl, category, variant,
+      credits, hasPendingTask: !!pendingTask, generating,
+    })
+    if (!imageUrl) {
+      logEvent('early_return', 'avatar-creator', { reason: 'no-image' })
+      toast.error('Suba uma imagem de referência'); return
+    }
+    if (!variant) {
+      logEvent('early_return', 'avatar-creator', { reason: 'no-variant' })
+      toast.error(`Selecione uma variante de ${category}`); return
+    }
+    if (insufficient) {
+      logEvent('early_return', 'avatar-creator', { reason: 'insufficient-credits' })
+      toast.error(`Créditos insuficientes (precisa ${CREDITS})`); return
+    }
+    logEvent('validations_passed', 'avatar-creator')
 
     setGenerating(true); setError(null); setResultUrl(null)
     try {
+      logEvent('invoke_dispatched', 'avatar-creator')
       // E24: removido `await supabase.auth.getSession()` defensivo. supabase-js já
       // anexa o bearer token automaticamente em invoke(). O await explícito travava
       // o frontend quando o auto-refresh interno do client estava pendurado, o que
@@ -156,11 +184,21 @@ export function AvatarCreatorPage() {
       // demais, gerava "tempo excedido" em rede um pouco lenta.
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
+      const elapsed = Date.now() - tStart
       if (result.kind === 'timeout') {
+        logEvent('invoke_timeout', 'avatar-creator', { elapsedMs: elapsed })
         setError('Tempo excedido. A geração pode estar em andamento — veja o Histórico do booster ou tente de novo.')
         return
       }
       const { data, error: invokeError } = result
+      logEvent('invoke_response', 'avatar-creator', {
+        elapsedMs: elapsed,
+        hasError: !!invokeError,
+        hasData: !!data,
+        hasImageUrl: !!data?.image_url,
+        hasTaskId: !!data?.task_id,
+        hasErrorField: !!data?.error,
+      })
       if (invokeError) throw invokeError
       if (data?.error) { setError(data.error); return }
       if (typeof data?.image_url === 'string' && /^https?:\/\//.test(data.image_url)) {
@@ -176,8 +214,10 @@ export function AvatarCreatorPage() {
       }
     } catch (err) {
       const e = err as Error
+      logEvent('invoke_catch', 'avatar-creator', { msg: String(e.message).slice(0, 200) })
       setError(e.message || 'Falha ao gerar avatar')
     } finally {
+      logEvent('finally_reached', 'avatar-creator')
       setGenerating(false)
     }
   }

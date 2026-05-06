@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Coins, Loader2, Upload, Sparkles, Download, Image as ImageIcon, Plus, X, Shirt, Palette, User, MoveDiagonal } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
@@ -8,6 +8,7 @@ import { resizeImageFile } from '../lib/imageUtils'
 import { BOOSTER_BY_SLUG } from '../types/boosters'
 import { TOOL_CREDITS } from '../types/credits'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
+import { logEvent } from '../lib/clientDiagnostic'
 
 const CREDITS = TOOL_CREDITS.edit_image
 
@@ -43,6 +44,17 @@ export function EditImagePage() {
   const [resultUrl, setResultUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // E29: snapshot de estado quando user abre a página, pra debug bug "2ª trava"
+  useEffect(() => {
+    logEvent('page_mount', 'edit-image', {
+      sw_active: !!navigator.serviceWorker?.controller,
+      sw_registered: !!navigator.serviceWorker,
+      online: navigator.onLine,
+      hasAuth: !!localStorage.getItem('sb-mdueuksfunifyxfqpmdv-auth-token'),
+      lsKeys: Object.keys(localStorage).filter(k => k.includes('vyral') || k.includes('sb-')).length,
+    })
+  }, [])
+
   const insufficient = credits < CREDITS
 
   async function handleMainFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -75,15 +87,28 @@ export function EditImagePage() {
   }
 
   async function handleGenerate() {
-    if (!mainImage) { toast.error('Suba a imagem para editar'); return }
-    if (!editPrompt.trim()) { toast.error('Descreva a edição ou escolha um template'); return }
+    const tStart = Date.now()
+    logEvent('click_received', 'edit-image', {
+      hasImage: !!mainImage,
+      hasPrompt: !!editPrompt.trim(),
+      template,
+      refImagesCount: refImages.length,
+      generating,
+    })
+    if (!mainImage) {
+      logEvent('early_return', 'edit-image', { reason: 'no-image' })
+      toast.error('Suba a imagem para editar'); return
+    }
+    if (!editPrompt.trim()) {
+      logEvent('early_return', 'edit-image', { reason: 'no-prompt' })
+      toast.error('Descreva a edição ou escolha um template'); return
+    }
+    logEvent('validations_passed', 'edit-image')
 
     setGenerating(true); setError(null); setResultUrl(null)
     try {
-      // E24: removido `await supabase.auth.getSession()` defensivo — era patch que
-      // virou parte do bug. Quando o auto-refresh interno do client estava pendurado,
-      // esse await travava o frontend antes do invoke disparar. supabase-js já anexa
-      // bearer automaticamente. Promise.race 90s abaixo cobre hang real do invoke.
+      logEvent('invoke_dispatched', 'edit-image')
+      // E28: timeout 180s — antes 90s era apertado.
       const invokePromise = supabase.functions.invoke('edit-image-inpaint', {
         body: {
           image_url: mainImage,
@@ -96,11 +121,21 @@ export function EditImagePage() {
       // E28: timeout 180s — antes 90s era apertado.
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
+      const elapsed = Date.now() - tStart
       if (result.kind === 'timeout') {
+        logEvent('invoke_timeout', 'edit-image', { elapsedMs: elapsed })
         setError('Tempo excedido. A edição pode estar em andamento — tente de novo daqui a pouco.')
         return
       }
       const { data, error: invokeError } = result
+      logEvent('invoke_response', 'edit-image', {
+        elapsedMs: elapsed,
+        hasError: !!invokeError,
+        errMsg: invokeError ? String(invokeError.message).slice(0, 100) : null,
+        hasData: !!data,
+        hasImageUrl: !!data?.image_url || !!data?.result,
+        hasErrorField: !!data?.error,
+      })
       if (invokeError) throw invokeError
       if (data?.error) { setError(data.error); return }
       const out = data?.image_url || data?.result
@@ -113,8 +148,10 @@ export function EditImagePage() {
       }
     } catch (err) {
       const e = err as Error
+      logEvent('invoke_catch', 'edit-image', { msg: String(e.message).slice(0, 200) })
       setError(e.message || 'Falha ao editar imagem')
     } finally {
+      logEvent('finally_reached', 'edit-image')
       setGenerating(false)
     }
   }

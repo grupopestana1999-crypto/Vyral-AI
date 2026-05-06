@@ -10,6 +10,7 @@ import { PromptGeneratorPanel } from '../components/studio/PromptGeneratorPanel'
 import { GenerationPreview } from '../components/studio/GenerationPreview'
 import { resizeImageFile } from '../lib/imageUtils'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
+import { logEvent } from '../lib/clientDiagnostic'
 
 const STUDIO_SESSION_KEY = 'vyral_studio_session'
 const STUDIO_SELECTIONS_KEY = 'vyral_studio_selections'
@@ -229,6 +230,19 @@ export function StudioPage() {
   const credits = subscription?.credits_remaining ?? 0
   const cost = TOOL_CREDITS.studio_image
 
+  // E29: snapshot do estado quando user abre a página
+  useEffect(() => {
+    logEvent('page_mount', 'studio', {
+      sw_active: !!navigator.serviceWorker?.controller,
+      sw_registered: !!navigator.serviceWorker,
+      online: navigator.onLine,
+      hasAuth: !!localStorage.getItem('sb-mdueuksfunifyxfqpmdv-auth-token'),
+      lsKeys: Object.keys(localStorage).filter(k => k.includes('vyral') || k.includes('sb-')).length,
+      restoredSessionStatus: session.status,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     let cancelled = false
 
@@ -293,9 +307,23 @@ export function StudioPage() {
   }
 
   async function handleGenerate() {
-    if (credits < cost) { toast.error('Créditos insuficientes'); return }
+    const tStart = Date.now()
+    logEvent('click_received', 'studio', {
+      credits, cost,
+      hasProduct, hasInfluencer, hasScene,
+      sessionStatus: session.status,
+      generating,
+    })
+    if (credits < cost) {
+      logEvent('early_return', 'studio', { reason: 'no-credits' })
+      toast.error('Créditos insuficientes'); return
+    }
     const productSource = resolveProductImage()
-    if (!productSource) { toast.error('Selecione um produto ou faça upload'); return }
+    if (!productSource) {
+      logEvent('early_return', 'studio', { reason: 'no-product-source' })
+      toast.error('Selecione um produto ou faça upload'); return
+    }
+    logEvent('validations_passed', 'studio')
 
     setSession({
       status: 'generating',
@@ -313,11 +341,8 @@ export function StudioPage() {
     const styleName = STYLES.find(s => s.id === style)?.name
 
     try {
-      // E24: removido `await supabase.auth.getSession()` defensivo. Era patch contra
-      // hipótese antiga de refresh JWT, mas virou parte do bug — o await travava
-      // aqui quando o auto-refresh interno do client estava pendurado, repassando
-      // o "carregando sem fim" pro usuário. supabase-js já anexa bearer
-      // automaticamente. Promise.race 90s abaixo cobre hang real do invoke.
+      logEvent('invoke_dispatched', 'studio')
+      // E24: removido `await supabase.auth.getSession()` defensivo.
       const invokePromise = supabase.functions.invoke('generate-influencer-image', {
         body: {
           product_image: productSource,
@@ -335,13 +360,22 @@ export function StudioPage() {
       // E28: timeout 180s — antes 90s era apertado vs backend 80s + rede.
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
+      const elapsed = Date.now() - tStart
 
       if (result.kind === 'timeout') {
+        logEvent('invoke_timeout', 'studio', { elapsedMs: elapsed })
         setSession(s => ({ ...s, status: 'error', errorMessage: 'Tempo excedido. A geração pode estar em andamento — tente de novo daqui a pouco.' }))
         toast.error('Tempo excedido. Tente de novo.')
         return
       }
       const { data, error } = result
+      logEvent('invoke_response', 'studio', {
+        elapsedMs: elapsed,
+        hasError: !!error,
+        hasData: !!data,
+        hasImageUrl: !!data?.image_url,
+        hasErrorField: !!data?.error,
+      })
       if (error) throw error
       if (data?.error) {
         setSession(s => ({ ...s, status: 'error', errorMessage: data.error }))
@@ -360,12 +394,12 @@ export function StudioPage() {
       }
     } catch (err) {
       const msg = (err as Error).message
+      logEvent('invoke_catch', 'studio', { msg: String(msg).slice(0, 200) })
       setSession(s => ({ ...s, status: 'error', errorMessage: msg }))
       toast.error('Erro: ' + msg)
     } finally {
-      // E26: garantia de que session.status SEMPRE sai de 'generating', mesmo
-      // se algum exception escape do try (bug original deixava status preso →
-      // botão Gerar disabled → "parece que nem tentei").
+      logEvent('finally_reached', 'studio')
+      // E26: garantia de que session.status SEMPRE sai de 'generating'
       setSession(s => s.status === 'generating'
         ? { ...s, status: 'error', errorMessage: 'Falha desconhecida — tente novamente.' }
         : s)

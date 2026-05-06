@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { User, Session } from '@supabase/supabase-js'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { setDiagnosticEmail } from '../lib/clientDiagnostic'
 import type { UserRole, Subscription } from '../types/database'
 
 interface AuthState {
@@ -35,6 +36,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const role = await fetchUserRole(session.user.id)
       const subscription = await fetchSubscription(session.user.email!)
       set({ user: session.user, session, role, subscription, isLoading: false })
+      setDiagnosticEmail(session.user.email ?? null)
       subscribeToSubscriptionChanges(session.user.email!, set)
     } else {
       set({ isLoading: false })
@@ -45,9 +47,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         const role = await fetchUserRole(session.user.id)
         const subscription = await fetchSubscription(session.user.email!)
         set({ user: session.user, session, role, subscription })
+        setDiagnosticEmail(session.user.email ?? null)
         subscribeToSubscriptionChanges(session.user.email!, set)
       } else {
         unsubscribeFromSubscriptionChanges()
+        setDiagnosticEmail(null)
         set({ user: null, session: null, role: 'user', subscription: null })
       }
     })
