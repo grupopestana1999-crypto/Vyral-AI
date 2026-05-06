@@ -280,9 +280,9 @@ function InfluencerLabInner() {
       // invoke + Promise.race timeout 90s — fix bug invoke-pendurado
       const invokePromise = supabase.functions.invoke(endpoint, { body: payload })
         .then(r => ({ kind: 'response' as const, ...r }))
-      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
-      if (result.kind === 'timeout') throw new Error('Tempo excedido (90s). Atualize a página e tente novamente.')
+      if (result.kind === 'timeout') throw new Error('Tempo excedido. A geração pode estar em andamento — tente de novo daqui a pouco.')
       const { data, error: invokeError } = result
       if (invokeError) throw invokeError
       if (data?.error) throw new Error(data.error)

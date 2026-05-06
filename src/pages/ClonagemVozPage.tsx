@@ -95,9 +95,9 @@ export function ClonagemVozPage() {
       const invokePromise = supabase.functions.invoke('text-to-speech', {
         body: { text, voice_id: selectedVoiceId },
       }).then(r => ({ kind: 'response' as const, ...r }))
-      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
-      if (result.kind === 'timeout') { toast.error('Tempo excedido (90s). Atualize a página e tente novamente.'); return }
+      if (result.kind === 'timeout') { toast.error('Tempo excedido. Tente de novo daqui a pouco.'); return }
       const { data, error: invokeError } = result
       if (invokeError) throw invokeError
       if (data?.error) { toast.error(data.error); return }

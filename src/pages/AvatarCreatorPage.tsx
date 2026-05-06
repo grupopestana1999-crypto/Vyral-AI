@@ -151,10 +151,13 @@ export function AvatarCreatorPage() {
       const invokePromise = supabase.functions.invoke('avatar-creator', {
         body: { image_url: imageUrl, category, variant },
       }).then(r => ({ kind: 'response' as const, ...r }))
-      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      // E28: timeout 180s pra dar margem confortável sobre KIE_POLL_TIMEOUT_MS (80s)
+      // do backend + tempo de roundtrip da rede do cliente. Antes 90s era apertado
+      // demais, gerava "tempo excedido" em rede um pouco lenta.
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
       if (result.kind === 'timeout') {
-        setError('Tempo excedido (90s). Atualize a página (Ctrl+Shift+R) e tente novamente.')
+        setError('Tempo excedido. A geração pode estar em andamento — veja o Histórico do booster ou tente de novo.')
         return
       }
       const { data, error: invokeError } = result

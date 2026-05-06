@@ -13,7 +13,7 @@ import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 
 const STUDIO_SESSION_KEY = 'vyral_studio_session'
 const STUDIO_SELECTIONS_KEY = 'vyral_studio_selections'
-const GENERATION_TIMEOUT_MS = 90_000
+const GENERATION_TIMEOUT_MS = 180_000
 
 interface StudioSession {
   status: 'idle' | 'generating' | 'done' | 'error'
@@ -332,12 +332,13 @@ export function StudioPage() {
           user_email: user?.email,
         },
       }).then(r => ({ kind: 'response' as const, ...r }))
-      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      // E28: timeout 180s — antes 90s era apertado vs backend 80s + rede.
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
 
       if (result.kind === 'timeout') {
-        setSession(s => ({ ...s, status: 'error', errorMessage: 'Tempo excedido (90s). Atualize a página e tente novamente.' }))
-        toast.error('Tempo excedido. Atualize a página.')
+        setSession(s => ({ ...s, status: 'error', errorMessage: 'Tempo excedido. A geração pode estar em andamento — tente de novo daqui a pouco.' }))
+        toast.error('Tempo excedido. Tente de novo.')
         return
       }
       const { data, error } = result

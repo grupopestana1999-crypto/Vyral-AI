@@ -46,10 +46,11 @@ export function PeleUltraPage() {
       const invokePromise = supabase.functions.invoke('skin-enhancer', {
         body: { image_url: imageUrl },
       }).then(r => ({ kind: 'response' as const, ...r }))
-      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      // E28: timeout 180s — antes 90s era apertado demais com backend levando 60-80s.
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
       if (result.kind === 'timeout') {
-        setError('Tempo excedido (90s). Atualize a página (Ctrl+Shift+R) e tente novamente.')
+        setError('Tempo excedido. A geração pode estar em andamento — veja o Histórico ou tente de novo.')
         return
       }
       const { data, error: invokeError } = result

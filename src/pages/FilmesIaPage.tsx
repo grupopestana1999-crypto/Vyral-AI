@@ -114,10 +114,10 @@ export function FilmesIaPage() {
 
       const invokePromise = supabase.functions.invoke('generate-kling3-video', { body })
         .then(r => ({ kind: 'response' as const, ...r }))
-      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
       if (result.kind === 'timeout') {
-        toast.error('Tempo excedido (90s). Atualize a página (Ctrl+Shift+R) e tente novamente.')
+        toast.error('Tempo excedido. A geração pode estar em andamento — veja o Histórico.')
         return
       }
       const { data, error: invokeError } = result

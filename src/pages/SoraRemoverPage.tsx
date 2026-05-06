@@ -41,9 +41,9 @@ export function SoraRemoverPage() {
       const invokePromise = supabase.functions.invoke('sora-watermark-remover', {
         body: { video_url: url },
       }).then(r => ({ kind: 'response' as const, ...r }))
-      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 90_000))
+      const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
-      if (result.kind === 'timeout') { setError('Tempo excedido (90s). Atualize a página e tente novamente.'); return }
+      if (result.kind === 'timeout') { setError('Tempo excedido. Tente de novo daqui a pouco.'); return }
       const { data, error: invokeError } = result
       if (invokeError) throw invokeError
       if (data?.error) { setError(data.error); return }
