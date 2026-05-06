@@ -149,10 +149,11 @@ export function StudioPage() {
       if (raw) {
         const parsed = JSON.parse(raw) as StudioSession
         if (parsed.status === 'generating') {
-          // Mantém 'generating' — recovery effect abaixo procura o resultado no storage
-          const stale = parsed.pendingSince && Date.now() - parsed.pendingSince > GENERATION_TIMEOUT_MS * 2
-          if (stale) return { status: 'idle', resultUrl: null, errorMessage: null }
-          return parsed
+          // E26: SEMPRE virar idle. Restaurar 'generating' fazia o botão Gerar ficar
+          // disabled após reload sem feedback claro pro user — bug "parece que nem
+          // tentei". Edge function continua executando do lado server independente
+          // do client UI. Se quiser recuperar, aba Histórico do booster mostra resultado.
+          return { status: 'idle', resultUrl: null, errorMessage: null }
         }
         if (parsed.status === 'done') {
           const validUrl = typeof parsed.resultUrl === 'string' && /^https?:\/\//.test(parsed.resultUrl)
@@ -170,6 +171,14 @@ export function StudioPage() {
   // Persist session em localStorage sempre que mudar
   useEffect(() => {
     try {
+      // E26: 'generating' é volátil — não persistir entre reloads. Sem isso,
+      // reload destrava UI automaticamente. Se geração estava em progresso,
+      // user vai ver botão Gerar habilitado e pode regerar; resultado anterior
+      // (se chegou) aparece na aba Histórico do booster.
+      if (session.status === 'generating') {
+        localStorage.removeItem(STUDIO_SESSION_KEY)
+        return
+      }
       localStorage.setItem(STUDIO_SESSION_KEY, JSON.stringify(session))
     } catch { /* quota / private mode */ }
   }, [session])
@@ -352,6 +361,13 @@ export function StudioPage() {
       const msg = (err as Error).message
       setSession(s => ({ ...s, status: 'error', errorMessage: msg }))
       toast.error('Erro: ' + msg)
+    } finally {
+      // E26: garantia de que session.status SEMPRE sai de 'generating', mesmo
+      // se algum exception escape do try (bug original deixava status preso →
+      // botão Gerar disabled → "parece que nem tentei").
+      setSession(s => s.status === 'generating'
+        ? { ...s, status: 'error', errorMessage: 'Falha desconhecida — tente novamente.' }
+        : s)
     }
   }
 
