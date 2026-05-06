@@ -42,6 +42,17 @@ export function ImitarMovimentoPage() {
   const credits = subscription?.credits_remaining ?? 0
 
   const [tab, setTab] = useState<Tab>('criar')
+  // Task ativa: polling client-side pra mostrar resultado direto na aba Criar quando
+  // Kie completar (cliente saber que tem feedback claro em vez de só "Processando…").
+  type ActiveTask = {
+    taskId: string
+    startedAt: number
+    status: 'pending' | 'success' | 'failed'
+    resultUrl?: string
+    errorMsg?: string
+  }
+  const [activeTask, setActiveTask] = useState<ActiveTask | null>(null)
+  const [elapsedS, setElapsedS] = useState(0)
   const [characterImage, setCharacterImage] = useState<string>('')
   // referenceVideo: pra preview local. Pode ser blob URL (upload local) ou URL HTTP (template).
   const [referenceVideo, setReferenceVideo] = useState<string>('')
@@ -82,6 +93,42 @@ export function ImitarMovimentoPage() {
     load()
     return () => { cancelled = true }
   }, [user?.email])
+
+  // E27: polling client-side da task Kie quando há geração ativa.
+  // Antes: client recebia task_id e mandava user pra aba Histórico — UX ruim porque
+  // cliente reportou "Processando…" sem fim. Agora poll a cada 5s na própria página
+  // e mostra vídeo direto quando completar.
+  useEffect(() => {
+    if (!activeTask || activeTask.status !== 'pending') return
+    let cancelled = false
+    const tick = setInterval(() => {
+      if (!cancelled) setElapsedS(Math.floor((Date.now() - activeTask.startedAt) / 1000))
+    }, 1000)
+    async function poll() {
+      if (cancelled) return
+      try {
+        const { data, error } = await supabase.functions.invoke('check-kie-task', {
+          body: { task_id: activeTask!.taskId, tool_name: 'motion_control' },
+        })
+        if (cancelled) return
+        if (error) return
+        if (data?.status === 'success' && typeof data?.result_url === 'string') {
+          setActiveTask(t => t ? { ...t, status: 'success', resultUrl: data.result_url } : null)
+          toast.success('Vídeo pronto!')
+        } else if (data?.status === 'failed') {
+          setActiveTask(t => t ? { ...t, status: 'failed', errorMsg: data.error || 'Geração falhou' } : null)
+          toast.error('Geração falhou: ' + (data.error || 'erro desconhecido'))
+        }
+      } catch { /* silent — tenta de novo no próximo tick */ }
+    }
+    poll()
+    const pollInterval = setInterval(poll, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(tick)
+      clearInterval(pollInterval)
+    }
+  }, [activeTask])
 
   function handleSelectTemplate(t: MotionTemplate) {
     setReferenceVideo(t.video_url)
@@ -162,8 +209,9 @@ export function ImitarMovimentoPage() {
       if (data?.error) { toast.error(data.error); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
-        toast.success('Vídeo entrou na fila — acompanhe na aba Histórico')
-        setTab('historico')
+        toast.success('Vídeo entrou na fila — aguarde aqui mesmo')
+        setActiveTask({ taskId: data.task_id, startedAt: Date.now(), status: 'pending' })
+        setElapsedS(0)
         setPrompt('')
       }
     } catch (err) {
@@ -240,6 +288,39 @@ export function ImitarMovimentoPage() {
             </button>
 
             <p className="text-[11px] text-white/40 text-center">Saldo: <span className="text-neon font-semibold">{credits}</span> créditos</p>
+
+            {/* E27: bloco de status da task ativa — polling client-side mostra resultado direto */}
+            {activeTask && (
+              <div className="mt-2 border-t border-white/5 pt-4 space-y-3">
+                {activeTask.status === 'pending' && (
+                  <div className="bg-surface-400 rounded-lg p-4 flex items-center gap-3">
+                    <Loader2 size={20} className="animate-spin text-primary-400 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm text-white font-medium">Gerando vídeo…</p>
+                      <p className="text-[11px] text-white/50">{Math.floor(elapsedS / 60)}:{String(elapsedS % 60).padStart(2, '0')} · Kling normalmente leva 1-2min</p>
+                    </div>
+                  </div>
+                )}
+                {activeTask.status === 'success' && activeTask.resultUrl && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-emerald-300 text-xs">
+                      <CheckCircle2 size={14} /> Vídeo pronto em {Math.floor(elapsedS / 60)}:{String(elapsedS % 60).padStart(2, '0')}
+                    </div>
+                    <video src={activeTask.resultUrl} controls className="w-full rounded-lg" />
+                    <div className="flex gap-2">
+                      <a href={activeTask.resultUrl} download={`motion-${Date.now()}.mp4`} className="flex-1 py-2 rounded-lg bg-primary-600/20 text-primary-300 hover:bg-primary-600/30 text-xs font-medium text-center cursor-pointer">Baixar</a>
+                      <button onClick={() => setActiveTask(null)} className="flex-1 py-2 rounded-lg bg-surface-400 text-white/70 hover:text-white text-xs font-medium cursor-pointer">Nova geração</button>
+                    </div>
+                  </div>
+                )}
+                {activeTask.status === 'failed' && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 space-y-2">
+                    <p className="text-xs text-red-300">{activeTask.errorMsg || 'Geração falhou'}</p>
+                    <button onClick={() => setActiveTask(null)} className="w-full py-2 rounded-lg bg-surface-400 text-white/70 hover:text-white text-xs font-medium cursor-pointer">Tentar de novo</button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="lg:col-span-7 bg-surface-300 border border-white/5 rounded-xl p-5 space-y-3 self-start">
