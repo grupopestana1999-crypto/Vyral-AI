@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Coins, Loader2, Upload, Sparkles, Download, Image as ImageIcon, Plus, X, Shirt, Palette, User, MoveDiagonal } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
@@ -43,6 +43,8 @@ export function EditImagePage() {
   const [generating, setGenerating] = useState(false)
   const [resultUrl, setResultUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // E30: ref síncrono pra impedir 2º click ANTES do React propagar setState
+  const generatingRef = useRef(false)
 
   // E29: snapshot de estado quando user abre a página, pra debug bug "2ª trava"
   useEffect(() => {
@@ -88,6 +90,12 @@ export function EditImagePage() {
 
   async function handleGenerate() {
     const tStart = Date.now()
+    // E30: ref guard SÍNCRONO. Bloqueia 2º click ANTES do React propagar disabled.
+    if (generatingRef.current) {
+      logEvent('early_return', 'edit-image', { reason: 'already-generating-ref' })
+      return
+    }
+    generatingRef.current = true
     logEvent('click_received', 'edit-image', {
       hasImage: !!mainImage,
       hasPrompt: !!editPrompt.trim(),
@@ -96,10 +104,12 @@ export function EditImagePage() {
       generating,
     })
     if (!mainImage) {
+      generatingRef.current = false
       logEvent('early_return', 'edit-image', { reason: 'no-image' })
       toast.error('Suba a imagem para editar'); return
     }
     if (!editPrompt.trim()) {
+      generatingRef.current = false
       logEvent('early_return', 'edit-image', { reason: 'no-prompt' })
       toast.error('Descreva a edição ou escolha um template'); return
     }
@@ -152,6 +162,7 @@ export function EditImagePage() {
       setError(e.message || 'Falha ao editar imagem')
     } finally {
       logEvent('finally_reached', 'edit-image')
+      generatingRef.current = false
       setGenerating(false)
     }
   }

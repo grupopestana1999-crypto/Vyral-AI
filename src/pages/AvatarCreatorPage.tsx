@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Loader2, Upload, Sparkles, Download, Image as ImageIcon, Sliders, CheckCircle2 } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
@@ -89,6 +89,8 @@ export function AvatarCreatorPage() {
   // poll client-side a cada 5s até completar — evita "Processando..." sem feedback.
   const [pendingTask, setPendingTask] = useState<{ taskId: string; startedAt: number } | null>(null)
   const [elapsedS, setElapsedS] = useState(0)
+  // E30: ref síncrono pra impedir 2º click ANTES do React propagar disabled
+  const generatingRef = useRef(false)
 
   const insufficient = credits < CREDITS
   const currentVariants = CATEGORIES.find(c => c.id === category)?.variants ?? []
@@ -151,19 +153,28 @@ export function AvatarCreatorPage() {
 
   async function handleGenerate() {
     const tStart = Date.now()
+    // E30: ref guard SÍNCRONO. Bloqueia 2º click ANTES do React propagar disabled.
+    if (generatingRef.current) {
+      logEvent('early_return', 'avatar-creator', { reason: 'already-generating-ref' })
+      return
+    }
+    generatingRef.current = true
     logEvent('click_received', 'avatar-creator', {
       hasImage: !!imageUrl, category, variant,
       credits, hasPendingTask: !!pendingTask, generating,
     })
     if (!imageUrl) {
+      generatingRef.current = false
       logEvent('early_return', 'avatar-creator', { reason: 'no-image' })
       toast.error('Suba uma imagem de referência'); return
     }
     if (!variant) {
+      generatingRef.current = false
       logEvent('early_return', 'avatar-creator', { reason: 'no-variant' })
       toast.error(`Selecione uma variante de ${category}`); return
     }
     if (insufficient) {
+      generatingRef.current = false
       logEvent('early_return', 'avatar-creator', { reason: 'insufficient-credits' })
       toast.error(`Créditos insuficientes (precisa ${CREDITS})`); return
     }
@@ -218,6 +229,7 @@ export function AvatarCreatorPage() {
       setError(e.message || 'Falha ao gerar avatar')
     } finally {
       logEvent('finally_reached', 'avatar-creator')
+      generatingRef.current = false
       setGenerating(false)
     }
   }

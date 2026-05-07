@@ -168,6 +168,8 @@ export function StudioPage() {
   })
   const [todayCount, setTodayCount] = useState(0)
   const generating = session.status === 'generating'
+  // E30: ref síncrono pra impedir 2º click ANTES do React propagar setState
+  const generatingRef = useRef(false)
 
   // Persist session em localStorage sempre que mudar
   useEffect(() => {
@@ -308,6 +310,14 @@ export function StudioPage() {
 
   async function handleGenerate() {
     const tStart = Date.now()
+    // E30: ref guard SÍNCRONO. Bloqueia 2º click ANTES do React propagar setState.
+    // Diagnostic do valdereztsc@gmail.com mostrou 3 invokes disparados em race,
+    // nenhum chegou no backend (supabase-js client trava com invokes paralelos).
+    if (generatingRef.current) {
+      logEvent('early_return', 'studio', { reason: 'already-generating-ref' })
+      return
+    }
+    generatingRef.current = true
     logEvent('click_received', 'studio', {
       credits, cost,
       hasProduct, hasInfluencer, hasScene,
@@ -315,11 +325,13 @@ export function StudioPage() {
       generating,
     })
     if (credits < cost) {
+      generatingRef.current = false
       logEvent('early_return', 'studio', { reason: 'no-credits' })
       toast.error('Créditos insuficientes'); return
     }
     const productSource = resolveProductImage()
     if (!productSource) {
+      generatingRef.current = false
       logEvent('early_return', 'studio', { reason: 'no-product-source' })
       toast.error('Selecione um produto ou faça upload'); return
     }
@@ -399,6 +411,8 @@ export function StudioPage() {
       toast.error('Erro: ' + msg)
     } finally {
       logEvent('finally_reached', 'studio')
+      // E30: liberar ref guard
+      generatingRef.current = false
       // E26: garantia de que session.status SEMPRE sai de 'generating'
       setSession(s => s.status === 'generating'
         ? { ...s, status: 'error', errorMessage: 'Falha desconhecida — tente novamente.' }
