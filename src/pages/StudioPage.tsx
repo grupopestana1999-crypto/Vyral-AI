@@ -11,6 +11,7 @@ import { GenerationPreview } from '../components/studio/GenerationPreview'
 import { resizeImageFile } from '../lib/imageUtils'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { logEvent } from '../lib/clientDiagnostic'
+import { invokeRaw } from '../lib/invokeRaw'
 
 const STUDIO_SESSION_KEY = 'vyral_studio_session'
 const STUDIO_SELECTIONS_KEY = 'vyral_studio_selections'
@@ -354,21 +355,20 @@ export function StudioPage() {
 
     try {
       logEvent('invoke_dispatched', 'studio')
-      // E24: removido `await supabase.auth.getSession()` defensivo.
-      const invokePromise = supabase.functions.invoke('generate-influencer-image', {
-        body: {
-          product_image: productSource,
-          avatar_image: selectedAvatar?.image_url ?? uploadedAvatar,
-          scene_image: sceneTab === 'upload' ? uploadedScene : null,
-          scene: `${sceneText}${additionalInfo ? ' | ' + additionalInfo : ''}`,
-          boost_quality: 2,
-          format,
-          pose: poseName,
-          style: styleName,
-          enhancements: enhancementList,
-          user_email: user?.email,
-        },
-      }).then(r => ({ kind: 'response' as const, ...r }))
+      // E31: invokeRaw em vez de supabase.functions.invoke() — invoke() pendura
+      // sem fazer fetch HTTP em sessões longas (provado por diagnostic E29).
+      const invokePromise = invokeRaw<{ image_url?: string; error?: string; credits_remaining?: number }>('generate-influencer-image', {
+        product_image: productSource,
+        avatar_image: selectedAvatar?.image_url ?? uploadedAvatar,
+        scene_image: sceneTab === 'upload' ? uploadedScene : null,
+        scene: `${sceneText}${additionalInfo ? ' | ' + additionalInfo : ''}`,
+        boost_quality: 2,
+        format,
+        pose: poseName,
+        style: styleName,
+        enhancements: enhancementList,
+        user_email: user?.email,
+      })
       // E28: timeout 180s — antes 90s era apertado vs backend 80s + rede.
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
@@ -390,8 +390,9 @@ export function StudioPage() {
       })
       if (error) throw error
       if (data?.error) {
-        setSession(s => ({ ...s, status: 'error', errorMessage: data.error }))
-        toast.error(data.error)
+        const msg = data.error
+        setSession(s => ({ ...s, status: 'error', errorMessage: msg }))
+        toast.error(msg)
         return
       }
       const url = data?.image_url

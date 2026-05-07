@@ -8,6 +8,7 @@ import { resizeImageFile } from '../lib/imageUtils'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { TOOL_CREDITS } from '../types/credits'
 import { logEvent } from '../lib/clientDiagnostic'
+import { invokeRaw } from '../lib/invokeRaw'
 
 const CREDITS = TOOL_CREDITS.avatar_creator
 
@@ -183,13 +184,12 @@ export function AvatarCreatorPage() {
     setGenerating(true); setError(null); setResultUrl(null)
     try {
       logEvent('invoke_dispatched', 'avatar-creator')
-      // E24: removido `await supabase.auth.getSession()` defensivo. supabase-js já
-      // anexa o bearer token automaticamente em invoke(). O await explícito travava
-      // o frontend quando o auto-refresh interno do client estava pendurado, o que
-      // explicava o "carregando sem fim" relatado mesmo com Promise.race depois.
-      const invokePromise = supabase.functions.invoke('avatar-creator', {
-        body: { image_url: imageUrl, category, variant },
-      }).then(r => ({ kind: 'response' as const, ...r }))
+      // E31: invokeRaw em vez de supabase.functions.invoke() — invoke() pendura
+      // sem fazer fetch HTTP em sessões longas (provado por diagnostic E29).
+      const invokePromise = invokeRaw<{ image_url?: string; task_id?: string; error?: string; credits_remaining?: number }>(
+        'avatar-creator',
+        { image_url: imageUrl, category, variant },
+      )
       // E28: timeout 180s pra dar margem confortável sobre KIE_POLL_TIMEOUT_MS (80s)
       // do backend + tempo de roundtrip da rede do cliente. Antes 90s era apertado
       // demais, gerava "tempo excedido" em rede um pouco lenta.

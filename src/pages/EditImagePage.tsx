@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Coins, Loader2, Upload, Sparkles, Download, Image as ImageIcon, Plus, X, Shirt, Palette, User, MoveDiagonal } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
-import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { resizeImageFile } from '../lib/imageUtils'
 import { BOOSTER_BY_SLUG } from '../types/boosters'
 import { TOOL_CREDITS } from '../types/credits'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { logEvent } from '../lib/clientDiagnostic'
+import { invokeRaw } from '../lib/invokeRaw'
 
 const CREDITS = TOOL_CREDITS.edit_image
 
@@ -118,16 +118,15 @@ export function EditImagePage() {
     setGenerating(true); setError(null); setResultUrl(null)
     try {
       logEvent('invoke_dispatched', 'edit-image')
-      // E28: timeout 180s — antes 90s era apertado.
-      const invokePromise = supabase.functions.invoke('edit-image-inpaint', {
-        body: {
-          image_url: mainImage,
-          edit_prompt: editPrompt,
-          reference_images: refImages,
-          template_id: template,
-          format,
-        },
-      }).then(r => ({ kind: 'response' as const, ...r }))
+      // E31: invokeRaw em vez de supabase.functions.invoke() — invoke() pendura
+      // sem fazer fetch HTTP em sessões longas (provado por diagnostic E29).
+      const invokePromise = invokeRaw<{ image_url?: string; result?: string; error?: string; credits_remaining?: number }>('edit-image-inpaint', {
+        image_url: mainImage,
+        edit_prompt: editPrompt,
+        reference_images: refImages,
+        template_id: template,
+        format,
+      })
       // E28: timeout 180s — antes 90s era apertado.
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
