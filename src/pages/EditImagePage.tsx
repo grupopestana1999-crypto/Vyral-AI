@@ -85,7 +85,7 @@ export function EditImagePage() {
   function pickTemplate(id: TemplateId) {
     setTemplate(id)
     const t = TEMPLATES.find(x => x.id === id)
-    if (t && !editPrompt.trim()) setEditPrompt(t.prompt)
+    if (t) setEditPrompt(t.prompt)
   }
 
   async function handleGenerate() {
