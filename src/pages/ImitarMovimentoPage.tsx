@@ -15,8 +15,11 @@ import { logEvent } from '../lib/clientDiagnostic'
 
 const MAX_PROMPT = 600
 const MIN_DURATION = 3
-const MAX_DURATION = 30
+// E37: Stories format. Kie kling 2.6 motion-control com character_orientation='image' tem cap 10s.
+// Antes era 30 (com 'video' orientation, mas saída saía horizontal herdando do reference video).
+const MAX_DURATION = 10
 const DEFAULT_DURATION = 5
+const ACTIVE_TASK_KEY = 'vyral.motion.activeTask'
 
 type Tab = 'criar' | 'historico'
 type Quality = '720p' | '1080p'
@@ -53,8 +56,27 @@ export function ImitarMovimentoPage() {
     resultUrl?: string
     errorMsg?: string
   }
-  const [activeTask, setActiveTask] = useState<ActiveTask | null>(null)
+  // E37: persistir activeTask em localStorage. Antes: task em memória só, cliente recarrega → perde
+  // status, vídeo "fica processando pra sempre" mesmo se Kie já completou. Recovery on mount.
+  const [activeTask, setActiveTask] = useState<ActiveTask | null>(() => {
+    try {
+      const raw = localStorage.getItem(ACTIVE_TASK_KEY)
+      if (!raw) return null
+      const parsed = JSON.parse(raw) as ActiveTask
+      // descarta tasks antigas (>20min) — Kling motion control raramente passa de 8min
+      if (parsed.status === 'pending' && Date.now() - parsed.startedAt > 20 * 60_000) return null
+      return parsed
+    } catch { return null }
+  })
   const [elapsedS, setElapsedS] = useState(0)
+
+  useEffect(() => {
+    try {
+      if (activeTask) localStorage.setItem(ACTIVE_TASK_KEY, JSON.stringify(activeTask))
+      else localStorage.removeItem(ACTIVE_TASK_KEY)
+    } catch { /* quota / private mode */ }
+  }, [activeTask])
+
   const [characterImage, setCharacterImage] = useState<string>('')
   // referenceVideo: pra preview local. Pode ser blob URL (upload local) ou URL HTTP (template).
   const [referenceVideo, setReferenceVideo] = useState<string>('')
@@ -293,7 +315,7 @@ export function ImitarMovimentoPage() {
 
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] text-white/40 uppercase tracking-wide">IMITAR MOVIMENTO · Kling Motion Control</p>
+          <p className="text-[11px] text-white/40 uppercase tracking-wide">IMITAR MOVIMENTO · Kling Motion Control · Stories 9:16</p>
           <h1 className="text-xl font-bold text-white">Anime personagens com vídeo de referência</h1>
           <p className="text-sm text-white/50">Replique movimentos/danças no seu personagem usando IA</p>
         </div>
