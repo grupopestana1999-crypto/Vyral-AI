@@ -80,21 +80,32 @@ export function AvatarCreatorPage() {
   const credits = subscription?.credits_remaining ?? 0
 
   const [imageUrl, setImageUrl] = useState<string>('')
-  const [category, setCategory] = useState<CategoryId>('pele')
-  const [variant, setVariant] = useState<string>('')
+  // E33: multi-select. Cliente pode combinar pele + corpo + cabelo (1 variante por
+  // categoria, máx 3 total). Substitui o antigo {category, variant} single-select.
+  const [selections, setSelections] = useState<{ pele?: string; corpo?: string; cabelo?: string }>({})
   const [generating, setGenerating] = useState(false)
   const [resultUrl, setResultUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // E27: nano-banana-pro com image_urls (edit mode) leva 90-120s, ultrapassa o
-  // KIE_POLL_TIMEOUT_MS (80s) da edge function. Quando volta task_id pending,
-  // poll client-side a cada 5s até completar — evita "Processando..." sem feedback.
+  // E27: poll client-side quando edge function retorna task_id pending
   const [pendingTask, setPendingTask] = useState<{ taskId: string; startedAt: number } | null>(null)
   const [elapsedS, setElapsedS] = useState(0)
   // E30: ref síncrono pra impedir 2º click ANTES do React propagar disabled
   const generatingRef = useRef(false)
 
   const insufficient = credits < CREDITS
-  const currentVariants = CATEGORIES.find(c => c.id === category)?.variants ?? []
+  const hasAnySelection = Object.values(selections).some(Boolean)
+
+  function toggleVariant(cat: CategoryId, variantId: string) {
+    setSelections(prev => {
+      if (prev[cat] === variantId) {
+        // clicar de novo na mesma variante → desmarca
+        const { [cat]: _removed, ...rest } = prev
+        return rest
+      }
+      // qualquer outro caso → seta (substitui se já tinha outra variante da mesma categoria)
+      return { ...prev, [cat]: variantId }
+    })
+  }
 
   // E29: snapshot pra debug bug "2ª trava"
   useEffect(() => {
@@ -161,7 +172,7 @@ export function AvatarCreatorPage() {
     }
     generatingRef.current = true
     logEvent('click_received', 'avatar-creator', {
-      hasImage: !!imageUrl, category, variant,
+      hasImage: !!imageUrl, selectionCount: Object.keys(selections).length,
       credits, hasPendingTask: !!pendingTask, generating,
     })
     if (!imageUrl) {
@@ -169,10 +180,10 @@ export function AvatarCreatorPage() {
       logEvent('early_return', 'avatar-creator', { reason: 'no-image' })
       toast.error('Suba uma imagem de referência'); return
     }
-    if (!variant) {
+    if (!hasAnySelection) {
       generatingRef.current = false
-      logEvent('early_return', 'avatar-creator', { reason: 'no-variant' })
-      toast.error(`Selecione uma variante de ${category}`); return
+      logEvent('early_return', 'avatar-creator', { reason: 'no-selection' })
+      toast.error('Selecione ao menos uma variante (pele, corpo ou cabelo)'); return
     }
     if (insufficient) {
       generatingRef.current = false
@@ -188,7 +199,7 @@ export function AvatarCreatorPage() {
       // sem fazer fetch HTTP em sessões longas (provado por diagnostic E29).
       const invokePromise = invokeRaw<{ image_url?: string; task_id?: string; error?: string; credits_remaining?: number }>(
         'avatar-creator',
-        { image_url: imageUrl, category, variant },
+        { image_url: imageUrl, selections },
       )
       // E28: timeout 180s pra dar margem confortável sobre KIE_POLL_TIMEOUT_MS (80s)
       // do backend + tempo de roundtrip da rede do cliente. Antes 90s era apertado
@@ -241,7 +252,8 @@ export function AvatarCreatorPage() {
       const blob = await res.blob()
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
-      a.download = `avatar-${category}-${Date.now()}.png`
+      const tag = Object.keys(selections).join('-') || 'avatar'
+      a.download = `avatar-${tag}-${Date.now()}.png`
       a.click()
       URL.revokeObjectURL(a.href)
     } catch {
@@ -259,7 +271,7 @@ export function AvatarCreatorPage() {
         <div>
           <p className="text-[11px] text-white/40 uppercase tracking-wide">AVATAR CREATOR</p>
           <h1 className="text-xl font-bold text-white">Crie seu influencer personalizado</h1>
-          <p className="text-sm text-white/50">Suba uma imagem e ajuste pele, corpo ou cabelo com IA</p>
+          <p className="text-sm text-white/50">Suba uma imagem e combine ajustes de pele, corpo e cabelo com IA</p>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-600/20 border border-primary-500/30 text-primary-300 text-sm font-bold">
           {CREDITS} créditos
@@ -289,39 +301,36 @@ export function AvatarCreatorPage() {
             </label>
           </div>
 
-          <div>
-            <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Tipo de personalização</p>
-            <div className="grid grid-cols-3 gap-2">
-              {CATEGORIES.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => { setCategory(c.id); setVariant('') }}
-                  className={`py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${category === c.id ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/50 hover:text-white'}`}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-            <p className="text-[10px] text-white/40 mt-1.5 italic">{CATEGORIES.find(c => c.id === category)?.description}</p>
-          </div>
-
-          <div>
-            <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Variante *</p>
-            <div className="grid grid-cols-3 gap-2">
-              {currentVariants.map(v => (
-                <VariantCard
-                  key={v.id}
-                  variant={v}
-                  selected={variant === v.id}
-                  onClick={() => setVariant(v.id)}
-                />
-              ))}
-            </div>
-          </div>
+          {/* E33: 3 seções sempre abertas — cliente combina pele + corpo + cabelo na mesma geração */}
+          {CATEGORIES.map(cat => {
+            const selectedVariantId = selections[cat.id]
+            const selectedVariant = cat.variants.find(v => v.id === selectedVariantId)
+            return (
+              <div key={cat.id}>
+                <div className="flex items-baseline justify-between mb-2">
+                  <p className="text-xs text-white/40 uppercase tracking-wide">
+                    {cat.label}
+                    {selectedVariant && <span className="text-primary-300 normal-case ml-1.5">· {selectedVariant.label}</span>}
+                  </p>
+                  <span className="text-[10px] text-white/30 italic">{cat.description}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {cat.variants.map(v => (
+                    <VariantCard
+                      key={v.id}
+                      variant={v}
+                      selected={selectedVariantId === v.id}
+                      onClick={() => toggleVariant(cat.id, v.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )
+          })}
 
           <button
             onClick={handleGenerate}
-            disabled={generating || !!pendingTask || insufficient || !imageUrl || !variant}
+            disabled={generating || !!pendingTask || insufficient || !imageUrl || !hasAnySelection}
             className="w-full py-3 rounded-xl bg-neon text-surface-500 font-bold text-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
           >
             {generating || pendingTask ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
