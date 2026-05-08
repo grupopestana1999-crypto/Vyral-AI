@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Loader2, Upload, Sparkles, User as UserIcon, Film, Volume2, Pause, CheckCircle2 } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
@@ -10,6 +10,8 @@ import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { calcCredits } from '../types/credits'
 import { useBoosterSettings } from '../stores/booster-settings-store'
 import { LazyVideo } from '../components/LazyVideo'
+import { invokeRaw } from '../lib/invokeRaw'
+import { logEvent } from '../lib/clientDiagnostic'
 
 const MAX_PROMPT = 600
 const MIN_DURATION = 3
@@ -65,6 +67,8 @@ export function ImitarMovimentoPage() {
   const [quality, setQuality] = useState<Quality>('720p')
   const [duration, setDuration] = useState(DEFAULT_DURATION)
   const [generating, setGenerating] = useState(false)
+  // E35: ref síncrono pra impedir 2º click ANTES do React propagar setState
+  const generatingRef = useRef(false)
 
   // Templates
   const [templates, setTemplates] = useState<MotionTemplate[]>([])
@@ -73,6 +77,17 @@ export function ImitarMovimentoPage() {
 
   const cost = calcCredits('motion_control', { duration_s: duration, quality })
   const insufficient = credits < cost
+
+  // E35: snapshot de estado quando user abre a página, pra debug bug "segue dando erro"
+  useEffect(() => {
+    logEvent('page_mount', 'imitar-movimento', {
+      sw_active: !!navigator.serviceWorker?.controller,
+      sw_registered: !!navigator.serviceWorker,
+      online: navigator.onLine,
+      hasAuth: !!localStorage.getItem('sb-mdueuksfunifyxfqpmdv-auth-token'),
+      lsKeys: Object.keys(localStorage).filter(k => k.includes('vyral') || k.includes('sb-')).length,
+    })
+  }, [])
 
   useEffect(() => {
     if (!user?.email) return
@@ -165,47 +180,91 @@ export function ImitarMovimentoPage() {
   }
 
   async function handleGenerate() {
-    if (!characterImage) { toast.error('Suba a imagem do personagem'); return }
-    if (!referenceVideo && !videoFile) { toast.error('Selecione um template ou suba um vídeo de referência'); return }
-    if (insufficient) { toast.error(`Créditos insuficientes (precisa ${cost})`); return }
+    const tStart = Date.now()
+    // E35: ref guard SÍNCRONO. Bloqueia 2º click ANTES do React propagar disabled.
+    if (generatingRef.current) {
+      logEvent('early_return', 'imitar-movimento', { reason: 'already-generating-ref' })
+      return
+    }
+    generatingRef.current = true
+    logEvent('click_received', 'imitar-movimento', {
+      hasCharacter: !!characterImage,
+      hasRefVideo: !!referenceVideo || !!videoFile,
+      fromTemplate: !!selectedTemplateId,
+      hasUpload: !!videoFile,
+      quality,
+      duration,
+      cost,
+    })
+    if (!characterImage) {
+      generatingRef.current = false
+      logEvent('early_return', 'imitar-movimento', { reason: 'no-character' })
+      toast.error('Suba a imagem do personagem'); return
+    }
+    if (!referenceVideo && !videoFile) {
+      generatingRef.current = false
+      logEvent('early_return', 'imitar-movimento', { reason: 'no-reference' })
+      toast.error('Selecione um template ou suba um vídeo de referência'); return
+    }
+    if (insufficient) {
+      generatingRef.current = false
+      logEvent('early_return', 'imitar-movimento', { reason: 'insufficient-credits' })
+      toast.error(`Créditos insuficientes (precisa ${cost})`); return
+    }
+    logEvent('validations_passed', 'imitar-movimento')
 
     setGenerating(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) throw new Error('sessão expirada')
-
       // Resolve a URL HTTP que vai pra edge fn. Template já tem URL HTTP. Upload local
       // precisa subir pro Storage primeiro (Edge Functions têm limite ~6MB de body JSON).
       let videoUrlForEdge: string
       if (videoFile) {
+        if (!user?.id) throw new Error('sessão expirada — faça login de novo')
         const ext = videoFile.name.split('.').pop()?.toLowerCase() || 'mp4'
-        const filename = `motion-uploads/${session.user.id}/${Date.now()}.${ext}`
+        const filename = `motion-uploads/${user.id}/${Date.now()}.${ext}`
+        logEvent('upload_dispatched', 'imitar-movimento', { ext, size: videoFile.size })
         const { error: upErr } = await supabase.storage.from('public-media').upload(filename, videoFile, { contentType: videoFile.type, upsert: false })
-        if (upErr) throw new Error('Falha ao subir vídeo: ' + upErr.message)
+        if (upErr) {
+          logEvent('upload_error', 'imitar-movimento', { msg: upErr.message })
+          throw new Error('Falha ao subir vídeo: ' + upErr.message)
+        }
         const { data: pub } = supabase.storage.from('public-media').getPublicUrl(filename)
         if (!pub?.publicUrl) throw new Error('Não consegui gerar URL pública do upload')
         videoUrlForEdge = pub.publicUrl
+        logEvent('upload_done', 'imitar-movimento')
       } else {
         // Veio de template — referenceVideo já é URL HTTP pública
         videoUrlForEdge = referenceVideo
       }
 
-      // invoke + Promise.race timeout 90s — fix bug invoke-pendurado
-      const invokePromise = supabase.functions.invoke('generate-motion-video', {
-        body: {
-          image_url: characterImage,
-          reference_video_url: videoUrlForEdge,
-          motion_prompt: prompt,
-          quality,
-          duration_s: duration,
-        },
-      }).then(r => ({ kind: 'response' as const, ...r }))
+      logEvent('invoke_dispatched', 'imitar-movimento')
+      // E35: invokeRaw em vez de supabase.functions.invoke() — invoke() pendura
+      // sem fazer fetch HTTP em sessões longas (mesmo bug provado em E29 pros 3 boosters
+      // já migrados em E31: edit-image, studio, avatar-creator).
+      const invokePromise = invokeRaw<{ task_id?: string; error?: string; credits_remaining?: number }>('generate-motion-video', {
+        image_url: characterImage,
+        reference_video_url: videoUrlForEdge,
+        motion_prompt: prompt,
+        quality,
+        duration_s: duration,
+      })
       // E28: timeout 180s
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
-      if (result.kind === 'timeout') { toast.error('Tempo excedido. A geração pode estar em andamento — veja o Histórico.'); return }
+      const elapsed = Date.now() - tStart
+      if (result.kind === 'timeout') {
+        logEvent('invoke_timeout', 'imitar-movimento', { elapsedMs: elapsed })
+        toast.error('Tempo excedido. A geração pode estar em andamento — veja o Histórico.'); return
+      }
       const { data, error: invokeError } = result
+      logEvent('invoke_response', 'imitar-movimento', {
+        elapsedMs: elapsed,
+        hasError: !!invokeError,
+        errMsg: invokeError ? String(invokeError.message).slice(0, 100) : null,
+        hasData: !!data,
+        hasTaskId: !!data?.task_id,
+        hasErrorField: !!data?.error,
+      })
       if (invokeError) throw invokeError
       if (data?.error) { toast.error(data.error); return }
       if (data?.task_id) {
@@ -216,8 +275,12 @@ export function ImitarMovimentoPage() {
         setPrompt('')
       }
     } catch (err) {
-      toast.error('Erro: ' + (err as Error).message)
+      const e = err as Error
+      logEvent('invoke_catch', 'imitar-movimento', { msg: String(e.message).slice(0, 200) })
+      toast.error('Erro: ' + e.message)
     } finally {
+      logEvent('finally_reached', 'imitar-movimento')
+      generatingRef.current = false
       setGenerating(false)
     }
   }
