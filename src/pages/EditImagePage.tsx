@@ -156,8 +156,8 @@ export function EditImagePage() {
         // E39: Trocar Pose retorna 202 + task_id (background processing Segmind). Polling local.
         applyCreditsFromResponse(data)
         const taskId = (data as { task_id: string }).task_id
-        toast.success('Editando — aguarde aqui mesmo (pode levar até 3min)')
-        const pollDeadline = Date.now() + 240_000  // 4min cap
+        toast.success('Editando — aguarde aqui mesmo (Trocar Pose pode levar 3-6min)')
+        const pollDeadline = Date.now() + 380_000  // 6min20s cap (Segmind queue às vezes 4-5min)
         while (Date.now() < pollDeadline) {
           await new Promise(r => setTimeout(r, 5000))
           const poll = await invokeRaw<{ status?: string; result_url?: string; error?: string }>('check-edit-pose', { task_id: taskId })
