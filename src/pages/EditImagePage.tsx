@@ -16,8 +16,8 @@ const TEMPLATES = [
   { id: 'roupa', label: 'Trocar Roupa', icon: Shirt, prompt: 'Substitua a roupa da pessoa por outra peça moderna, mantendo o estilo casual e o ambiente. Mantenha o rosto e a pose iguais.', disabled: false },
   { id: 'cenario', label: 'Trocar Cenário', icon: Palette, prompt: 'Substitua o fundo/cenário da imagem por um novo ambiente, mantendo a pessoa e o produto exatamente iguais e bem iluminados.', disabled: false },
   { id: 'influencer', label: 'Trocar Influencer', icon: User, prompt: 'Substitua o rosto e identidade da pessoa pela pessoa que está nas imagens de referência. Mantenha exatamente a mesma roupa, pose, iluminação e cenário da imagem principal.', disabled: false },
-  // E41: pose em manutenção. Modelo Segmind gerava NSFW. Migração pra Replicate em andamento.
-  { id: 'pose', label: 'Trocar Pose', icon: MoveDiagonal, prompt: 'Mude a pose da pessoa pra uma posição mais natural e dinâmica, mantendo o rosto, roupa e cenário iguais.', disabled: true },
+  // E42: pose migrado pra Replicate zsxkib/instant-id (safety checker ativo + negative prompt anti-NSFW).
+  { id: 'pose', label: 'Trocar Pose', icon: MoveDiagonal, prompt: 'Mude a pose da pessoa pra uma posição mais natural e dinâmica, mantendo o rosto, roupa e cenário iguais.', disabled: false },
 ] as const
 
 const FORMATS = [
