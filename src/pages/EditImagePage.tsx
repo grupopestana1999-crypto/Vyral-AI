@@ -13,10 +13,11 @@ import { invokeRaw } from '../lib/invokeRaw'
 const CREDITS = TOOL_CREDITS.edit_image
 
 const TEMPLATES = [
-  { id: 'roupa', label: 'Trocar Roupa', icon: Shirt, prompt: 'Substitua a roupa da pessoa por outra peça moderna, mantendo o estilo casual e o ambiente. Mantenha o rosto e a pose iguais.' },
-  { id: 'cenario', label: 'Trocar Cenário', icon: Palette, prompt: 'Substitua o fundo/cenário da imagem por um novo ambiente, mantendo a pessoa e o produto exatamente iguais e bem iluminados.' },
-  { id: 'influencer', label: 'Trocar Influencer', icon: User, prompt: 'Substitua o rosto e identidade da pessoa pela pessoa que está nas imagens de referência. Mantenha exatamente a mesma roupa, pose, iluminação e cenário da imagem principal.' },
-  { id: 'pose', label: 'Trocar Pose', icon: MoveDiagonal, prompt: 'Mude a pose da pessoa pra uma posição mais natural e dinâmica, mantendo o rosto, roupa e cenário iguais.' },
+  { id: 'roupa', label: 'Trocar Roupa', icon: Shirt, prompt: 'Substitua a roupa da pessoa por outra peça moderna, mantendo o estilo casual e o ambiente. Mantenha o rosto e a pose iguais.', disabled: false },
+  { id: 'cenario', label: 'Trocar Cenário', icon: Palette, prompt: 'Substitua o fundo/cenário da imagem por um novo ambiente, mantendo a pessoa e o produto exatamente iguais e bem iluminados.', disabled: false },
+  { id: 'influencer', label: 'Trocar Influencer', icon: User, prompt: 'Substitua o rosto e identidade da pessoa pela pessoa que está nas imagens de referência. Mantenha exatamente a mesma roupa, pose, iluminação e cenário da imagem principal.', disabled: false },
+  // E41: pose em manutenção. Modelo Segmind gerava NSFW. Migração pra Replicate em andamento.
+  { id: 'pose', label: 'Trocar Pose', icon: MoveDiagonal, prompt: 'Mude a pose da pessoa pra uma posição mais natural e dinâmica, mantendo o rosto, roupa e cenário iguais.', disabled: true },
 ] as const
 
 const FORMATS = [
@@ -278,16 +279,26 @@ export function EditImagePage() {
               {TEMPLATES.map(t => {
                 const Icon = t.icon
                 const active = template === t.id
+                const disabled = t.disabled
                 return (
                   <button
                     key={t.id}
-                    onClick={() => pickTemplate(t.id)}
-                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
-                      active ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/60 hover:text-white border border-white/5'
+                    onClick={() => {
+                      if (disabled) {
+                        toast.info('Trocar Pose está em manutenção temporária. Use Roupa, Cenário ou Influencer.')
+                        return
+                      }
+                      pickTemplate(t.id)
+                    }}
+                    title={disabled ? 'Em manutenção temporária — voltará em breve' : undefined}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative ${
+                      disabled ? 'bg-surface-400 text-white/30 cursor-not-allowed border border-white/5' :
+                      active ? 'bg-primary-600 text-white cursor-pointer' : 'bg-surface-400 text-white/60 hover:text-white border border-white/5 cursor-pointer'
                     }`}
                   >
-                    <Icon size={14} className={active ? 'text-white' : 'text-primary-400'} />
+                    <Icon size={14} className={disabled ? 'text-white/20' : active ? 'text-white' : 'text-primary-400'} />
                     {t.label}
+                    {disabled && <span className="ml-auto text-[9px] uppercase tracking-wide text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">Em manutenção</span>}
                   </button>
                 )
               })}
