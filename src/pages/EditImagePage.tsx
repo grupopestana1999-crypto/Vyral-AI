@@ -152,6 +152,28 @@ export function EditImagePage() {
         applyCreditsFromResponse(data)
         setResultUrl(out)
         toast.success('Imagem editada!')
+      } else if ((data as { task_id?: string })?.task_id) {
+        // E39: Trocar Pose retorna 202 + task_id (background processing Segmind). Polling local.
+        applyCreditsFromResponse(data)
+        const taskId = (data as { task_id: string }).task_id
+        toast.success('Editando — aguarde aqui mesmo (pode levar até 3min)')
+        const pollDeadline = Date.now() + 240_000  // 4min cap
+        while (Date.now() < pollDeadline) {
+          await new Promise(r => setTimeout(r, 5000))
+          const poll = await invokeRaw<{ status?: string; result_url?: string; error?: string }>('check-edit-pose', { task_id: taskId })
+          if (poll.error) continue
+          const ps = poll.data?.status
+          if (ps === 'success' && poll.data?.result_url) {
+            setResultUrl(poll.data.result_url)
+            toast.success('Imagem editada!')
+            return
+          }
+          if (ps === 'failed') {
+            setError(poll.data?.error || 'Geração falhou. Créditos estornados.')
+            return
+          }
+        }
+        setError('Tempo excedido aguardando resultado. Veja o histórico.')
       } else {
         setError('Resposta inesperada da IA. Tente novamente.')
       }
