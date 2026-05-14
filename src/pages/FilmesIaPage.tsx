@@ -2,13 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Loader2, Upload, Sparkles, Wand2, Volume2, VolumeX, Image as ImageIcon } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
-import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { resizeImageFile } from '../lib/imageUtils'
 import { HistoryTab } from '../components/boosters/HistoryTab'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { calcCredits } from '../types/credits'
 import { useBoosterSettings } from '../stores/booster-settings-store'
+import { invokeRaw } from '../lib/invokeRaw'
 
 const MAX_PROMPT = 1200
 const MIN_DURATION = 3
@@ -40,6 +40,8 @@ export function FilmesIaPage() {
   const [enhancing, setEnhancing] = useState(false)
   const [enhanceElapsed, setEnhanceElapsed] = useState(0)
   const enhanceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // E44: cliente quer card "Processando" instantâneo no Histórico após click Gerar.
+  const [historyRefresh, setHistoryRefresh] = useState(0)
 
   // Conta segundos durante "Melhorar Prompt" — Gemini leva 15-30s, sem feedback
   // o usuário acha que travou. Mesmo padrão do PromptGeneratorPanel do Studio.
@@ -75,10 +77,10 @@ export function FilmesIaPage() {
     if (!prompt.trim()) { toast.error('Escreva algo no prompt primeiro'); return }
     setEnhancing(true)
     try {
-      // Padrão do PromptGeneratorPanel/EditImagePage: invoke() em vez de fetch raw —
-      // resolve o issue de "carrega sem fim" reportado pelo cliente.
-      const { data, error } = await supabase.functions.invoke('enhance-prompt', {
-        body: { description: prompt, type: 'video' },
+      // E44: invokeRaw em vez de supabase.functions.invoke — invoke() pendura em
+      // sessões longas. Mesma migração do EditImagePage/PeleUltraPage pós-E31/E43.
+      const { data, error } = await invokeRaw<{ prompt?: string; error?: string; credits_remaining?: number }>('enhance-prompt', {
+        description: prompt, type: 'video',
       })
       if (error) throw new Error(error.message)
       if (data?.error) { toast.error(data.error); return }
@@ -99,10 +101,11 @@ export function FilmesIaPage() {
     if (insufficient) { toast.error(`Créditos insuficientes (precisa ${cost})`); return }
 
     setGenerating(true)
+    // E44: switch otimista pra Histórico ANTES do invokeRaw — cliente quer ver
+    // "Processando" instantâneo em vez de ficar 1-2s na aba Criar e achar que travou.
+    setTab('historico')
     try {
-      // E24: migrado de fetch raw + getSession + Authorization manual pra invoke().
-      // fetch raw sem timeout travava em sessões longas. invoke + Promise.race 90s
-      // dá comportamento consistente com Pele/Avatar/Edit (todas funcionam).
+      // E44: invokeRaw em vez de invoke() — mesmo padrão Pele/Avatar/Edit.
       const body: Record<string, unknown> = {
         prompt,
         audio,
@@ -112,8 +115,7 @@ export function FilmesIaPage() {
       if (imageInitial) body.image_url = imageInitial
       if (imageTail) body.image_tail_url = imageTail
 
-      const invokePromise = supabase.functions.invoke('generate-kling3-video', { body })
-        .then(r => ({ kind: 'response' as const, ...r }))
+      const invokePromise = invokeRaw<{ task_id?: string; error?: string; credits_remaining?: number }>('generate-kling3-video', body)
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
       if (result.kind === 'timeout') {
@@ -122,15 +124,16 @@ export function FilmesIaPage() {
       }
       const { data, error: invokeError } = result
       if (invokeError) throw invokeError
-      if (data?.error) { toast.error(data.error); return }
+      if (data?.error) { toast.error(data.error); setTab('criar'); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
         toast.success('Vídeo entrou na fila — acompanhe na aba Histórico')
-        setTab('historico')
+        setHistoryRefresh(prev => prev + 1)
         setPrompt(''); setImageInitial(''); setImageTail('')
       }
     } catch (err) {
       toast.error('Erro: ' + (err as Error).message)
+      setTab('criar')
     } finally {
       setGenerating(false)
     }
@@ -239,7 +242,7 @@ export function FilmesIaPage() {
           </div>
         </div>
       ) : (
-        <HistoryTab tool="kling_3" mediaType="video" />
+        <HistoryTab tool="kling_3" mediaType="video" refreshTrigger={historyRefresh} />
       )}
     </div>
   )

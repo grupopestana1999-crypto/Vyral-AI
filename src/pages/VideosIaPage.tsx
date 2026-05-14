@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Loader2, Upload, Sparkles, Wand2 } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
-import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { resizeImageFile } from '../lib/imageUtils'
 import { HistoryTab } from '../components/boosters/HistoryTab'
@@ -10,11 +9,14 @@ import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { calcCredits } from '../types/credits'
 import { useBoosterSettings } from '../stores/booster-settings-store'
 import { CreditPreview } from '../components/boosters/CreditPreview'
+import { invokeRaw } from '../lib/invokeRaw'
 
 const MAX_PROMPT = 800
-const MIN_DURATION = 1
+// E44: backend generate-grok-video v26 exige duration 6-30s (Kie grok-imagine).
+// Antes era 1, batia em "Value must be within range" 500.
+const MIN_DURATION = 6
 const MAX_DURATION = 15
-const DEFAULT_DURATION = 5
+const DEFAULT_DURATION = 6
 
 type Tab = 'criar' | 'historico'
 
@@ -31,6 +33,10 @@ export function VideosIaPage() {
   const [enhancing, setEnhancing] = useState(false)
   const [enhanceElapsed, setEnhanceElapsed] = useState(0)
   const enhanceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // E44: cliente quer que o card "Processando" apareça IMEDIATO no Histórico —
+  // tab switcha otimisticamente e refreshTrigger força re-fetch após backend
+  // INSERT do credit_usage_log pending.
+  const [historyRefresh, setHistoryRefresh] = useState(0)
 
   useEffect(() => {
     if (enhancing) {
@@ -62,9 +68,10 @@ export function VideosIaPage() {
     if (!prompt.trim()) { toast.error('Escreva algo no prompt primeiro'); return }
     setEnhancing(true)
     try {
-      // invoke() em vez de fetch raw — fix do bug "carrega sem fim".
-      const { data, error } = await supabase.functions.invoke('enhance-prompt', {
-        body: { description: prompt, type: 'video' },
+      // E44: invokeRaw em vez de supabase.functions.invoke — invoke() pendura em
+      // sessões longas (vide Pele Realista pré-E43). Padrão alinhado com Edit/Avatar/Pele.
+      const { data, error } = await invokeRaw<{ prompt?: string; error?: string; over_limit?: boolean; uses_lifetime?: number; lifetime_limit?: number; uses_today?: number; limit?: number; credits_remaining?: number }>('enhance-prompt', {
+        description: prompt, type: 'video',
       })
       if (error) throw new Error(error.message)
       if (data?.error) { toast.error(data.error); return }
@@ -88,14 +95,15 @@ export function VideosIaPage() {
     if (insufficient) { toast.error(`Créditos insuficientes (precisa ${cost})`); return }
 
     setGenerating(true)
+    // E44: switch otimista pra Histórico ANTES do invokeRaw — cliente quer ver
+    // o card "Processando" instantaneamente em vez de ficar esperando 1-2s na aba
+    // Criar e achar que travou. Backend insere credit_usage_log pending logo de cara.
+    setTab('historico')
     try {
-      // E24: migrado de fetch raw + getSession + Authorization manual pra invoke().
-      // fetch raw sem timeout travava em sessões longas — exatamente o "carregando
-      // sem fim" que cliente reclamou. invoke() + Promise.race 90s = consistente
-      // com Pele/Avatar/Edit (todas funcionam estáveis).
-      const invokePromise = supabase.functions.invoke('generate-grok-video', {
-        body: { prompt, image_url: imageUrl, duration_s: duration },
-      }).then(r => ({ kind: 'response' as const, ...r }))
+      // E44: invokeRaw em vez de invoke() — mesma migração da Pele Realista (E43).
+      const invokePromise = invokeRaw<{ task_id?: string; error?: string; credits_remaining?: number }>('generate-grok-video', {
+        prompt, image_url: imageUrl, duration_s: duration,
+      })
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
       if (result.kind === 'timeout') {
@@ -104,16 +112,17 @@ export function VideosIaPage() {
       }
       const { data, error: invokeError } = result
       if (invokeError) throw invokeError
-      if (data?.error) { toast.error(data.error); return }
+      if (data?.error) { toast.error(data.error); setTab('criar'); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
         toast.success('Vídeo entrou na fila — acompanhe na aba Histórico')
-        setTab('historico')
+        setHistoryRefresh(prev => prev + 1)
         setPrompt('')
         setImageUrl('')
       }
     } catch (err) {
       toast.error('Erro: ' + (err as Error).message)
+      setTab('criar')
     } finally {
       setGenerating(false)
     }
@@ -128,7 +137,7 @@ export function VideosIaPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[11px] text-white/40 uppercase tracking-wide">VÍDEOS IA</p>
-          <h1 className="text-xl font-bold text-white">Image to Video · 720p · 1-15s</h1>
+          <h1 className="text-xl font-bold text-white">Image to Video · 720p · 6-15s</h1>
           <p className="text-sm text-white/50">Transforme imagens em vídeos animados com IA</p>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-600/20 border border-primary-500/30 text-primary-300 text-sm font-bold">
@@ -248,7 +257,7 @@ export function VideosIaPage() {
           </div>
         </div>
       ) : (
-        <HistoryTab tool="grok_video" mediaType="video" />
+        <HistoryTab tool="grok_video" mediaType="video" refreshTrigger={historyRefresh} />
       )}
     </div>
   )

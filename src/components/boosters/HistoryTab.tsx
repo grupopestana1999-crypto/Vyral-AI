@@ -21,9 +21,11 @@ interface Props {
   mediaType?: 'video' | 'image'
   /** Aspect ratio do thumbnail — '16:9' default (horizontal), '9:16' pra Stories */
   aspectRatio?: '16:9' | '9:16' | '1:1'
+  /** E44: parent incrementa esse valor pra forçar re-fetch (ex: depois de novo invoke success) */
+  refreshTrigger?: number
 }
 
-export function HistoryTab({ tool, mediaType = 'video', aspectRatio = '16:9' }: Props) {
+export function HistoryTab({ tool, mediaType = 'video', aspectRatio = '16:9', refreshTrigger = 0 }: Props) {
   const { user } = useAuthStore()
   const [items, setItems] = useState<HistoryItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,7 +44,9 @@ export function HistoryTab({ tool, mediaType = 'video', aspectRatio = '16:9' }: 
     setLoading(false)
   }, [user?.email, tool])
 
-  useEffect(() => { load() }, [load])
+  // E44: re-fetch quando parent incrementa refreshTrigger (ex: novo invoke success
+  // antes do polling de 30s pegar).
+  useEffect(() => { load() }, [load, refreshTrigger])
 
   // Polling a cada 30s pra atualizar tasks pendentes
   useEffect(() => {
