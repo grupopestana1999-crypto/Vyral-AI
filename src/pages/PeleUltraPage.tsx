@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Loader2, Upload, Sparkles, Download } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
-import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { resizeImageFile } from '../lib/imageUtils'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { TOOL_CREDITS } from '../types/credits'
+import { invokeRaw } from '../lib/invokeRaw'
 
 const CREDITS = TOOL_CREDITS.skin_enhancer
 
@@ -39,14 +39,12 @@ export function PeleUltraPage() {
 
     setGenerating(true); setError(null); setResultUrl(null)
     try {
-      // E24: removido `await supabase.auth.getSession()` defensivo — era patch que
-      // virou parte do bug "carregando sem fim". O await travava aqui quando o
-      // auto-refresh interno do client estava pendurado. supabase-js já anexa
-      // bearer automaticamente. Promise.race 90s abaixo cobre hang real do invoke.
-      const invokePromise = supabase.functions.invoke('skin-enhancer', {
-        body: { image_url: imageUrl },
-      }).then(r => ({ kind: 'response' as const, ...r }))
-      // E28: timeout 180s — antes 90s era apertado demais com backend levando 60-80s.
+      // E43: invokeRaw em vez de supabase.functions.invoke() — invoke() pendura silenciosamente
+      // sem fazer HTTP em sessões longas (cliente reportou "tempo excedido 2x" sem nada chegar
+      // no backend, mesmo padrão dos boosters migrados em E31).
+      const invokePromise = invokeRaw<{ image_url?: string; task_id?: string; error?: string; credits_remaining?: number }>('skin-enhancer', {
+        image_url: imageUrl,
+      })
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
       if (result.kind === 'timeout') {

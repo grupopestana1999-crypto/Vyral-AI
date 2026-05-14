@@ -19,9 +19,11 @@ interface Props {
   tool: string
   /** Tipo de mídia exibida — 'video' renderiza <video>, 'image' <img> */
   mediaType?: 'video' | 'image'
+  /** Aspect ratio do thumbnail — '16:9' default (horizontal), '9:16' pra Stories */
+  aspectRatio?: '16:9' | '9:16' | '1:1'
 }
 
-export function HistoryTab({ tool, mediaType = 'video' }: Props) {
+export function HistoryTab({ tool, mediaType = 'video', aspectRatio = '16:9' }: Props) {
   const { user } = useAuthStore()
   const [items, setItems] = useState<HistoryItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -124,14 +126,19 @@ export function HistoryTab({ tool, mediaType = 'video' }: Props) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-        {items.map(it => (
+        {items.map(it => {
+          // E43: aspect ratio dinâmico — 9:16 pra Stories (motion_control, veo_video)
+          // não corta vídeos verticais. object-contain preserva sem zoom/crop.
+          const aspectClass = aspectRatio === '9:16' ? 'aspect-[9/16]' : aspectRatio === '1:1' ? 'aspect-square' : 'aspect-video'
+          const fitClass = aspectRatio === '9:16' ? 'object-contain' : 'object-cover'
+          return (
           <div key={it.id} className="bg-surface-300 border border-white/5 rounded-xl overflow-hidden">
-            <div className="aspect-video bg-surface-400 flex items-center justify-center relative">
+            <div className={`${aspectClass} bg-surface-400 flex items-center justify-center relative`}>
               {it.result_url ? (
                 mediaType === 'video' ? (
-                  <video src={it.result_url} className="w-full h-full object-cover" controls preload="metadata" />
+                  <video src={it.result_url} className={`w-full h-full ${fitClass}`} controls preload="metadata" />
                 ) : (
-                  <img src={it.result_url} alt="" className="w-full h-full object-cover" />
+                  <img src={it.result_url} alt="" className={`w-full h-full ${fitClass}`} />
                 )
               ) : it.status === 'pending' ? (
                 <div className="flex flex-col items-center gap-2 text-white/40">
@@ -167,7 +174,8 @@ export function HistoryTab({ tool, mediaType = 'video' }: Props) {
               )}
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

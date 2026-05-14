@@ -452,7 +452,7 @@ export function ImitarMovimentoPage() {
           </div>
         </div>
       ) : (
-        <HistoryTab tool="motion_control" mediaType="video" />
+        <HistoryTab tool="motion_control" mediaType="video" aspectRatio="9:16" />
       )}
     </div>
   )

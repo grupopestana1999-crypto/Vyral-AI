@@ -9,6 +9,7 @@ import { HistoryTab } from '../components/boosters/HistoryTab'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { calcCredits } from '../types/credits'
 import { useBoosterSettings } from '../stores/booster-settings-store'
+import { invokeRaw } from '../lib/invokeRaw'
 import type { Avatar } from '../types/database'
 
 const MAX_TEXT = 600
@@ -69,10 +70,11 @@ export function AvatarVideosPage() {
     try {
       const prompt = `Avatar realista falando o seguinte texto em português brasileiro com sincronização labial perfeita: "${text.trim()}". Movimentos naturais e expressões faciais autênticas. Sem texto na tela.`
 
-      // invoke + Promise.race timeout 90s — fix bug invoke-pendurado
-      const invokePromise = supabase.functions.invoke('generate-veo-video', {
-        body: { prompt, image_url: avatarSrc, mode },
-      }).then(r => ({ kind: 'response' as const, ...r }))
+      // E43: invokeRaw em vez de invoke() — cliente reportou "demorou e deu falha", padrão
+      // do invoke pendurando antes de virar HTTP (mesmo bug que E31 fixou pros 3 boosters principais).
+      const invokePromise = invokeRaw<{ task_id?: string; mode?: string; error?: string; credits_remaining?: number }>('generate-veo-video', {
+        prompt, image_url: avatarSrc, mode,
+      })
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
       if (result.kind === 'timeout') { toast.error('Tempo excedido. A geração pode estar em andamento — veja o Histórico.'); return }
@@ -200,7 +202,7 @@ export function AvatarVideosPage() {
           </div>
         </div>
       ) : (
-        <HistoryTab tool="veo_video" mediaType="video" />
+        <HistoryTab tool="veo_video" mediaType="video" aspectRatio="9:16" />
       )}
     </div>
   )
