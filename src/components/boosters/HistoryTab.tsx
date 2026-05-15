@@ -38,6 +38,10 @@ export function HistoryTab({ tool, mediaType = 'video', aspectRatio = '16:9', re
       .select('id, tool_name, status, result_url, external_task_id, created_at, credits_used')
       .eq('user_email', user.email)
       .eq('tool_name', tool)
+      // E46: defesa em profundidade. Row de geração real sempre tem external_task_id
+      // ou result_url. Excluir os que têm AMBOS null (resíduo de bug antigo da RPC
+      // debit_credits que inseria row fantasma "success" sem URL).
+      .or('external_task_id.not.is.null,result_url.not.is.null')
       .order('created_at', { ascending: false })
       .limit(20)
     if (!error && data) setItems(data as HistoryItem[])

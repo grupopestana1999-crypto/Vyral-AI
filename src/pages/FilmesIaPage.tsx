@@ -127,7 +127,7 @@ export function FilmesIaPage() {
       if (data?.error) { toast.error(data.error); setTab('criar'); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
-        toast.success('Vídeo entrou na fila — acompanhe na aba Histórico')
+        toast.success('Vídeo em processamento — leva de 2 a 5 minutos. Assim que ficar pronto aparece na aba Histórico!')
         setHistoryRefresh(prev => prev + 1)
         setPrompt(''); setImageInitial(''); setImageTail('')
       }

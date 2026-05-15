@@ -83,7 +83,7 @@ export function AvatarVideosPage() {
       if (data?.error) { toast.error(data.error); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
-        toast.success('Avatar entrou na fila — acompanhe na aba Histórico')
+        toast.success('Vídeo em processamento — leva de 2 a 5 minutos. Assim que ficar pronto aparece na aba Histórico!')
         setTab('historico')
         setText('')
       }
