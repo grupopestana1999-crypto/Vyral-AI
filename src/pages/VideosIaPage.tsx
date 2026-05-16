@@ -257,7 +257,7 @@ export function VideosIaPage() {
           </div>
         </div>
       ) : (
-        <HistoryTab tool="grok_video" mediaType="video" refreshTrigger={historyRefresh} />
+        <HistoryTab tool="grok_video" mediaType="video" aspectRatio="9:16" refreshTrigger={historyRefresh} />
       )}
     </div>
   )
