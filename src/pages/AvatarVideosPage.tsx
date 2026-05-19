@@ -12,10 +12,9 @@ import { useBoosterSettings } from '../stores/booster-settings-store'
 import { invokeRaw } from '../lib/invokeRaw'
 import type { Avatar } from '../types/database'
 
-const MAX_TEXT = 600
+const MAX_TEXT = 2000
 
 type Tab = 'criar' | 'historico'
-type Mode = 'lite' | 'fast'
 type AvatarTab = 'galeria' | 'upload'
 
 export function AvatarVideosPage() {
@@ -29,10 +28,11 @@ export function AvatarVideosPage() {
   const [selectedAvatar, setSelectedAvatar] = useState<Avatar | null>(null)
   const [uploadedAvatar, setUploadedAvatar] = useState<string>('')
   const [text, setText] = useState('')
-  const [mode, setMode] = useState<Mode>('lite')
   const [generating, setGenerating] = useState(false)
 
-  const cost = calcCredits('veo_video', { veo_mode: mode })
+  // E48b: Sora 2 image-to-video tem 1 tier só. Mantemos calcCredits com mode='lite'
+  // por compat com schema antigo, mas backend agora usa tier 'default' (com fallback pra 'lite').
+  const cost = calcCredits('veo_video', { veo_mode: 'lite' })
   const insufficient = credits < cost
 
   // Re-roda quando user.email vira disponível: auth-store inicializa async,
@@ -68,12 +68,12 @@ export function AvatarVideosPage() {
 
     setGenerating(true)
     try {
-      const prompt = `Avatar realista falando o seguinte texto em português brasileiro com sincronização labial perfeita: "${text.trim()}". Movimentos naturais e expressões faciais autênticas. Sem texto na tela.`
+      // E48b: Sora 2 image-to-video. O prompt agora é descrição de cena/movimento
+      // (Sora 2 não faz lip-sync de áudio). Texto do user é a descrição direta.
+      const prompt = text.trim()
 
-      // E43: invokeRaw em vez de invoke() — cliente reportou "demorou e deu falha", padrão
-      // do invoke pendurando antes de virar HTTP (mesmo bug que E31 fixou pros 3 boosters principais).
-      const invokePromise = invokeRaw<{ task_id?: string; mode?: string; error?: string; credits_remaining?: number }>('generate-veo-video', {
-        prompt, image_url: avatarSrc, mode,
+      const invokePromise = invokeRaw<{ task_id?: string; error?: string; credits_remaining?: number }>('generate-veo-video', {
+        prompt, image_url: avatarSrc,
       })
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
@@ -102,12 +102,12 @@ export function AvatarVideosPage() {
 
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] text-white/40 uppercase tracking-wide">AVATAR VÍDEOS · Veo 3.1</p>
-          <h1 className="text-xl font-bold text-white">Avatar com áudio sincronizado · 720p · até 15s</h1>
-          <p className="text-sm text-white/50">Crie vídeos ultrarrealistas com avatar e áudio sincronizado em segundos</p>
+          <p className="text-[11px] text-white/40 uppercase tracking-wide">AVATAR VÍDEOS · Sora 2</p>
+          <h1 className="text-xl font-bold text-white">Vídeo realista · 720p · 10s</h1>
+          <p className="text-sm text-white/50">Anime uma foto: descreva a cena/movimento e a IA gera o vídeo</p>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-600/20 border border-primary-500/30 text-primary-300 text-xs font-bold">
-          Lite {useBoosterSettings.getState().getCredits('veo_video', 'lite') ?? 15}cr · Fast {useBoosterSettings.getState().getCredits('veo_video', 'fast') ?? 30}cr
+          {useBoosterSettings.getState().getCredits('veo_video', 'lite') ?? cost}cr / vídeo
         </div>
       </div>
 
@@ -159,24 +159,16 @@ export function AvatarVideosPage() {
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-white/40 uppercase tracking-wide">Texto que o avatar vai falar</p>
+                <p className="text-xs text-white/40 uppercase tracking-wide">Descreva a cena/movimento</p>
                 <span className="text-[10px] text-white/30">{text.length}/{MAX_TEXT}</span>
               </div>
               <textarea
                 value={text}
                 onChange={e => setText(e.target.value.slice(0, MAX_TEXT))}
-                placeholder="Ex: Oi gente, dá uma olhada nesse produto incrível que eu testei…"
-                rows={4}
+                placeholder="Ex: Pessoa sorrindo e acenando para a câmera, vento leve mexendo o cabelo, luz natural de fim de tarde…"
+                rows={5}
                 className="w-full px-4 py-2.5 bg-surface-400 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary-500 resize-none"
               />
-            </div>
-
-            <div>
-              <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Modelo</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setMode('lite')} className={`py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${mode === 'lite' ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/50 hover:text-white'}`}>Veo 3.1 Lite — 15cr</button>
-                <button onClick={() => setMode('fast')} className={`py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${mode === 'fast' ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/50 hover:text-white'}`}>Veo 3.1 Fast — 30cr</button>
-              </div>
             </div>
 
             <button onClick={handleGenerate} disabled={generating || insufficient || !text.trim() || (avatarTab === 'galeria' ? !selectedAvatar : !uploadedAvatar)} className="w-full py-3 rounded-xl bg-neon text-surface-500 font-bold text-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer">
@@ -191,13 +183,12 @@ export function AvatarVideosPage() {
             <p className="text-xs text-white/40 uppercase tracking-wide">Como funciona</p>
             <ol className="space-y-2 list-decimal list-inside text-[13px]">
               <li>Escolha um avatar da galeria OU suba uma foto sua</li>
-              <li>Digite o texto que o avatar vai falar (até {MAX_TEXT} chars)</li>
-              <li>Selecione o modelo: <strong>Lite</strong> (mais rápido) ou <strong>Fast</strong> (qualidade superior)</li>
-              <li>Clique Gerar — debita conforme modelo e entra na fila</li>
-              <li>Resultado aparece na aba <span className="text-primary-400 font-medium">Histórico</span></li>
+              <li>Descreva a cena/movimento que quer ver no vídeo (até {MAX_TEXT} chars)</li>
+              <li>Clique Gerar — debita os créditos e entra na fila</li>
+              <li>Resultado aparece em ~2 a 5 minutos na aba <span className="text-primary-400 font-medium">Histórico</span></li>
             </ol>
             <div className="bg-surface-400/50 border border-white/5 rounded-lg p-3 text-[12px]">
-              <p className="text-white/60 leading-relaxed"><span className="text-amber-300 font-medium">Dica:</span> textos curtos (1 a 2 frases) renderizam mais naturais. Avatares com fundo neutro funcionam melhor.</p>
+              <p className="text-white/60 leading-relaxed"><span className="text-amber-300 font-medium">Dica:</span> seja específico no que quer ver acontecer — "pessoa olhando para a câmera e sorrindo" funciona melhor que "vídeo de pessoa". Fotos com rosto bem visível dão resultado melhor.</p>
             </div>
           </div>
         </div>
