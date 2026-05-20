@@ -5,7 +5,7 @@ export const USD_TO_BRL = 5.50
 // Vários boosters mudaram de cobrança fixa para por segundo. Sempre que tiver `_per_s` no nome, é unidade por segundo.
 // Studio IA: 2cr (1ª grátis); Editar 2cr; Avatar Vídeos Lite=15/Fast=30 fixo;
 // Imitar Movimento: 6/9 cr/s (720/1080); Vídeos IA (Grok): 2cr/s; Filmes IA (Kling): 7 sem áudio/10 com áudio cr/s;
-// Sora: 20cr fixo; Clonagem voz: 5cr/1000chars; Transcrição: 2cr/min; Pele Ultra: 4cr; Avatar Creator: 2cr.
+// Sora: 20cr fixo; Clonagem voz: 5cr/1000chars; Transcrição: 2cr/min; Pele Ultra: 50cr (Clarity Pro 4K, E51); Avatar Creator: 2cr.
 export const TOOL_CREDITS = {
   studio_image: 2,              // 1ª grátis (controle via daily_image_usage)
   edit_image: 2,
