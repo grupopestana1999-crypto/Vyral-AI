@@ -7,18 +7,23 @@ import { resizeImageFile } from '../lib/imageUtils'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { TOOL_CREDITS } from '../types/credits'
 import { invokeRaw } from '../lib/invokeRaw'
+import { HistoryTab } from '../components/boosters/HistoryTab'
 
 const CREDITS = TOOL_CREDITS.skin_enhancer
+
+type Tab = 'criar' | 'historico'
 
 export function PeleUltraPage() {
   const navigate = useNavigate()
   const { subscription } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
 
+  const [tab, setTab] = useState<Tab>('criar')
   const [imageUrl, setImageUrl] = useState<string>('')
   const [generating, setGenerating] = useState(false)
   const [resultUrl, setResultUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [historyRefresh, setHistoryRefresh] = useState(0)
 
   const insufficient = credits < CREDITS
 
@@ -57,6 +62,7 @@ export function PeleUltraPage() {
       if (typeof data?.image_url === 'string' && /^https?:\/\//.test(data.image_url)) {
         applyCreditsFromResponse(data)
         setResultUrl(data.image_url)
+        setHistoryRefresh(prev => prev + 1)
         toast.success('Pele aprimorada!')
       } else if (data?.task_id) {
         applyCreditsFromResponse(data)
@@ -104,6 +110,12 @@ export function PeleUltraPage() {
         </div>
       </div>
 
+      <div className="flex gap-1 bg-surface-300 rounded-xl p-1 max-w-md">
+        <button onClick={() => setTab('criar')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${tab === 'criar' ? 'bg-primary-600 text-white' : 'text-white/50 hover:text-white'}`}>Criar</button>
+        <button onClick={() => setTab('historico')} className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${tab === 'historico' ? 'bg-primary-600 text-white' : 'text-white/50 hover:text-white'}`}>Histórico</button>
+      </div>
+
+      {tab === 'criar' ? (
       <div className="bg-surface-300 border border-white/5 rounded-xl p-5 space-y-4">
         {!resultUrl ? (
           <label className="block">
@@ -128,8 +140,21 @@ export function PeleUltraPage() {
           </label>
         ) : (
           <div className="space-y-3">
-            <p className="text-xs text-white/40 uppercase tracking-wide">Resultado</p>
-            <img src={resultUrl} alt="Resultado" className="w-full rounded-lg border border-white/10" />
+            <p className="text-xs text-white/40 uppercase tracking-wide">Antes / Depois</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-white/50 font-medium uppercase tracking-wide">Antes</p>
+                <div className="aspect-square rounded-lg border border-white/10 overflow-hidden bg-black/30 flex items-center justify-center">
+                  <img src={imageUrl} alt="Original" className="w-full h-full object-contain" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-neon font-medium uppercase tracking-wide">Depois</p>
+                <div className="aspect-square rounded-lg border border-neon/30 overflow-hidden bg-black/30 flex items-center justify-center">
+                  <img src={resultUrl} alt="Aprimorada" className="w-full h-full object-contain" />
+                </div>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => { setResultUrl(null); setImageUrl('') }}
@@ -162,7 +187,11 @@ export function PeleUltraPage() {
 
         {error && <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-xs text-red-300">{error}</div>}
       </div>
+      ) : (
+        <HistoryTab tool="skin_enhancer" mediaType="image" aspectRatio="1:1" refreshTrigger={historyRefresh} />
+      )}
 
+      {tab === 'criar' && (
       <div className="bg-surface-300 border border-white/5 rounded-xl p-4 text-sm text-white/70">
         <p className="text-xs text-white/40 uppercase tracking-wide mb-2">O que é otimizado</p>
         <ul className="grid grid-cols-2 gap-y-1.5 gap-x-3 text-[12px] list-disc list-inside">
@@ -172,6 +201,7 @@ export function PeleUltraPage() {
           <li>Aspecto natural (sem efeito artificial)</li>
         </ul>
       </div>
+      )}
     </div>
   )
 }
