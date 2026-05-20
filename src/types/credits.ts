@@ -12,7 +12,7 @@ export const TOOL_CREDITS = {
   veo_video: 15,                // Avatar Vídeos Lite (fixo)
   veo_video_fast: 30,           // Avatar Vídeos Fast (fixo)
   avatar_creator: 2,            // NEW - Pele/Corpo/Cabelo
-  skin_enhancer: 4,             // NEW - Pele Ultra Realista
+  skin_enhancer: 50,            // E51: Clarity Pro 4K — cobre $0.50 USD custo Replicate
   motion_control_per_s_720: 6,  // Imitar Movimento 720p
   motion_control_per_s_1080: 9, // Imitar Movimento 1080p
   grok_video_per_s: 2,          // Vídeos IA por segundo
