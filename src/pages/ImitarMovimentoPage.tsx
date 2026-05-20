@@ -14,12 +14,35 @@ import { invokeRaw } from '../lib/invokeRaw'
 import { logEvent } from '../lib/clientDiagnostic'
 
 const MAX_PROMPT = 600
-const MIN_DURATION = 3
-// E37: Stories format. Kie kling 2.6 motion-control com character_orientation='image' tem cap 10s.
-// Antes era 30 (com 'video' orientation, mas saída saía horizontal herdando do reference video).
-const MAX_DURATION = 10
+const MIN_DURATION = 1
+// E50: removido cap 10s. Cliente quis "sem limite". Subido pra 60s (cobre Reels/TikTok longos).
+// Backend generate-motion-video v29 também aceita até 60s.
+const MAX_DURATION = 60
 const DEFAULT_DURATION = 5
 const ACTIVE_TASK_KEY = 'vyral.motion.activeTask'
+
+// E50: mede duração real do vídeo de referência via HTMLVideoElement (blob URL ou HTTP).
+// Substitui motion_templates.duration_s do DB que estava errado em alguns templates,
+// causando prejuízo (cobrava 5s mas Kie cobrava o tempo real do vídeo).
+function getVideoDuration(url: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const v = document.createElement('video')
+    v.preload = 'metadata'
+    v.muted = true
+    v.crossOrigin = 'anonymous'
+    const cleanup = () => { v.removeAttribute('src'); v.load() }
+    const timer = setTimeout(() => { cleanup(); reject(new Error('timeout')) }, 15000)
+    v.onloadedmetadata = () => {
+      clearTimeout(timer)
+      const d = v.duration
+      cleanup()
+      if (!isFinite(d) || d <= 0) reject(new Error('duração inválida'))
+      else resolve(d)
+    }
+    v.onerror = () => { clearTimeout(timer); cleanup(); reject(new Error('erro ao carregar metadados')) }
+    v.src = url
+  })
+}
 
 type Tab = 'criar' | 'historico'
 type Quality = '720p' | '1080p'
@@ -167,11 +190,19 @@ export function ImitarMovimentoPage() {
     }
   }, [activeTask])
 
-  function handleSelectTemplate(t: MotionTemplate) {
+  async function handleSelectTemplate(t: MotionTemplate) {
     setReferenceVideo(t.video_url)
     setVideoFile(null) // template já tem URL pública, não precisa upload
     setSelectedTemplateId(t.id)
-    if (t.duration_s) setDuration(Math.min(MAX_DURATION, Math.max(MIN_DURATION, t.duration_s)))
+    // E50: mede duração real do MP4 — ignora t.duration_s do DB (estava errado em vários templates)
+    try {
+      const d = await getVideoDuration(t.video_url)
+      const rounded = Math.min(MAX_DURATION, Math.max(MIN_DURATION, Math.ceil(d)))
+      setDuration(rounded)
+    } catch {
+      // fallback: usa duration_s do DB se medição falhar (codec não suportado etc)
+      if (t.duration_s) setDuration(Math.min(MAX_DURATION, Math.max(MIN_DURATION, t.duration_s)))
+    }
   }
 
   const filteredTemplates = categoryFilter === 'todos'
@@ -189,7 +220,7 @@ export function ImitarMovimentoPage() {
     } finally { e.target.value = '' }
   }
 
-  function handleVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 30 * 1024 * 1024) { toast.error('Vídeo muito grande (max 30MB)'); e.target.value = ''; return }
@@ -199,6 +230,13 @@ export function ImitarMovimentoPage() {
     setVideoFile(file)
     setSelectedTemplateId(null) // upload manual desmarca template
     e.target.value = ''
+    // E50: mede duração real do vídeo subido e ajusta duration/custo automaticamente
+    try {
+      const d = await getVideoDuration(previewUrl)
+      setDuration(Math.min(MAX_DURATION, Math.max(MIN_DURATION, Math.ceil(d))))
+    } catch {
+      // se falhar, mantém duração atual (user pode ajustar manual)
+    }
   }
 
   async function handleGenerate() {
