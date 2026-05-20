@@ -8,7 +8,6 @@ import { resizeImageFile } from '../lib/imageUtils'
 import { HistoryTab } from '../components/boosters/HistoryTab'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { calcCredits } from '../types/credits'
-import { useBoosterSettings } from '../stores/booster-settings-store'
 import { invokeRaw } from '../lib/invokeRaw'
 import type { Avatar } from '../types/database'
 
@@ -28,11 +27,11 @@ export function AvatarVideosPage() {
   const [selectedAvatar, setSelectedAvatar] = useState<Avatar | null>(null)
   const [uploadedAvatar, setUploadedAvatar] = useState<string>('')
   const [text, setText] = useState('')
+  const [resolution, setResolution] = useState<'720p' | '1080p'>('720p')
   const [generating, setGenerating] = useState(false)
 
-  // E48b: Sora 2 image-to-video tem 1 tier só. Mantemos calcCredits com mode='lite'
-  // por compat com schema antigo, mas backend agora usa tier 'default' (com fallback pra 'lite').
-  const cost = calcCredits('veo_video', { veo_mode: 'lite' })
+  // E48d: cliente escolhe entre Lite-720p (15cr, mais barato) e Lite-1080p (20cr, mais qualidade).
+  const cost = calcCredits('veo_video', { resolution })
   const insufficient = credits < cost
 
   // Re-roda quando user.email vira disponível: auth-store inicializa async,
@@ -73,7 +72,7 @@ export function AvatarVideosPage() {
       const prompt = text.trim()
 
       const invokePromise = invokeRaw<{ task_id?: string; error?: string; credits_remaining?: number }>('generate-veo-video', {
-        prompt, image_url: avatarSrc,
+        prompt, image_url: avatarSrc, resolution,
       })
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
@@ -102,12 +101,12 @@ export function AvatarVideosPage() {
 
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] text-white/40 uppercase tracking-wide">AVATAR VÍDEOS · Sora 2</p>
-          <h1 className="text-xl font-bold text-white">Vídeo realista · 720p · 10s</h1>
+          <p className="text-[11px] text-white/40 uppercase tracking-wide">AVATAR VÍDEOS · Veo 3.1</p>
+          <h1 className="text-xl font-bold text-white">Vídeos Realistas · 720p ou 1080p · 8s</h1>
           <p className="text-sm text-white/50">Anime uma foto: descreva a cena/movimento e a IA gera o vídeo</p>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary-600/20 border border-primary-500/30 text-primary-300 text-xs font-bold">
-          {useBoosterSettings.getState().getCredits('veo_video', 'lite') ?? cost}cr / vídeo
+          {cost}cr / vídeo
         </div>
       </div>
 
@@ -169,6 +168,28 @@ export function AvatarVideosPage() {
                 rows={5}
                 className="w-full px-4 py-2.5 bg-surface-400 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-primary-500 resize-none"
               />
+            </div>
+
+            <div>
+              <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Qualidade do vídeo</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setResolution('720p')}
+                  className={`py-2.5 rounded-lg text-sm font-medium transition-all border cursor-pointer ${resolution === '720p' ? 'bg-primary-600 text-white border-primary-500' : 'bg-surface-400 text-white/60 border-white/10 hover:border-white/30'}`}
+                >
+                  <div className="font-semibold">720p</div>
+                  <div className="text-[11px] opacity-80 mt-0.5">{calcCredits('veo_video', { resolution: '720p' })} cr · mais barato</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResolution('1080p')}
+                  className={`py-2.5 rounded-lg text-sm font-medium transition-all border cursor-pointer ${resolution === '1080p' ? 'bg-primary-600 text-white border-primary-500' : 'bg-surface-400 text-white/60 border-white/10 hover:border-white/30'}`}
+                >
+                  <div className="font-semibold">1080p</div>
+                  <div className="text-[11px] opacity-80 mt-0.5">{calcCredits('veo_video', { resolution: '1080p' })} cr · mais qualidade</div>
+                </button>
+              </div>
             </div>
 
             <button onClick={handleGenerate} disabled={generating || insufficient || !text.trim() || (avatarTab === 'galeria' ? !selectedAvatar : !uploadedAvatar)} className="w-full py-3 rounded-xl bg-neon text-surface-500 font-bold text-sm hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer">

@@ -49,13 +49,15 @@ export function HistoryTab({ tool, mediaType = 'video', aspectRatio = '16:9', re
   }, [user?.email, tool])
 
   // E44: re-fetch quando parent incrementa refreshTrigger (ex: novo invoke success
-  // antes do polling de 30s pegar).
+  // antes do polling pegar).
   useEffect(() => { load() }, [load, refreshTrigger])
 
-  // Polling a cada 30s pra atualizar tasks pendentes
+  // E48d: polling a cada 8s (era 30s — cliente reportou que Kie ficava pronto e
+  // app demorava até 1min pra mostrar). 8s mantém latência percebida em ~4s média
+  // sem pesar muito no backend (check-kie-task é leve).
   useEffect(() => {
     if (!items.some(i => i.status === 'pending')) return
-    const t = setInterval(refreshPending, 30_000)
+    const t = setInterval(refreshPending, 8_000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items])

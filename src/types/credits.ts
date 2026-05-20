@@ -64,6 +64,7 @@ export interface CreditCalcOpts {
   audio?: boolean
   chars?: number
   veo_mode?: 'lite' | 'fast'
+  resolution?: '720p' | '1080p'
 }
 
 function dbCredits(tool: string, tier: string): number | null {
@@ -91,8 +92,15 @@ export function calcCredits(tool: string, opts: CreditCalcOpts = {}): number {
       return Math.ceil(sec * rate)
     }
     case 'veo_video': {
-      const tier = opts.veo_mode === 'fast' ? 'fast' : 'lite'
-      return dbCredits('veo_video', tier) ?? (opts.veo_mode === 'fast' ? TOOL_CREDITS.veo_video_fast : TOOL_CREDITS.veo_video)
+      // E48d: resolução 720p/1080p substitui o antigo veo_mode lite/fast.
+      // Fallback pra 'lite' (compat com chamadas antigas que ainda passam veo_mode).
+      const tier = opts.resolution === '1080p' ? '1080p' : opts.resolution === '720p' ? '720p' : (opts.veo_mode === 'fast' ? 'fast' : 'lite')
+      const dbVal = dbCredits('veo_video', tier)
+      if (dbVal != null) return dbVal
+      // Defaults hardcoded quando store ainda não carregou
+      if (tier === '720p') return 15
+      if (tier === '1080p') return 20
+      return opts.veo_mode === 'fast' ? TOOL_CREDITS.veo_video_fast : TOOL_CREDITS.veo_video
     }
     case 'voice_clone': {
       const chars = Math.max(1, opts.chars ?? 0)
