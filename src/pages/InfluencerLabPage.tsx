@@ -154,14 +154,15 @@ function InfluencerLabInner() {
         && ((scene.data as { scenarioId?: string; customPrompt?: string }).scenarioId || (scene.data as { customPrompt?: string }).customPrompt)
       return { ready: !!ok, hint: 'Conecte Produto + Influencer + Cena (Ajustes é opcional)' }
     }
-    // E52b: helper pra extrair imageUrl de qualquer ancestor relevante (incluindo Gerar Imagem)
+    // E52b+E52d: helper pra extrair imageUrl de qualquer ancestor relevante
+    // (input nodes OU action nodes que produzem imagem — Gerar Imagem, Editar Imagem)
     function findAncestorImg(): string | undefined {
       for (const n of a) {
         if (n.type === 'image' || n.type === 'product' || n.type === 'avatar') {
           const u = (n.data as { imageUrl?: string }).imageUrl
           if (u) return u
         }
-        if (n.type === 'generate') {
+        if (n.type === 'generate' || n.type === 'edit-image') {
           const u = (n.data as { resultUrl?: string }).resultUrl
           if (u) return u
         }
@@ -255,15 +256,15 @@ function InfluencerLabInner() {
         payload = { description, type: 'video', style: sd.estilo || 'ugc' }
       } else {
         // Actions self-contained: edit-image / video / motion. Aceitam dados próprios OU conectados.
-        // E52b: também aceita conectar de Gerar Imagem (lê resultUrl) — permite encadeamento.
+        // E52b+E52d: também aceita conectar de Gerar Imagem OU Editar Imagem (lê resultUrl) — permite encadeamento.
         const ancestorImg = a.find(n => {
           if (n.type === 'image' || n.type === 'product' || n.type === 'avatar') return true
-          if (n.type === 'generate' && (n.data as { resultUrl?: string }).resultUrl) return true
+          if ((n.type === 'generate' || n.type === 'edit-image') && (n.data as { resultUrl?: string }).resultUrl) return true
           return false
         })
         const promptN = a.find(n => n.type === 'prompt')
         const nd = node.data as { selfImageUrl?: string; selfRefImageUrl?: string; ownPrompt?: string; editPrompt?: string; editTemplate?: string; referenceVideoUrl?: string; mode?: string }
-        const ancestorImgUrl = ancestorImg?.type === 'generate'
+        const ancestorImgUrl = (ancestorImg?.type === 'generate' || ancestorImg?.type === 'edit-image')
           ? (ancestorImg.data as { resultUrl?: string }).resultUrl
           : (ancestorImg?.data as { imageUrl?: string } | undefined)?.imageUrl
         const imgUrl = nd.selfImageUrl || ancestorImgUrl

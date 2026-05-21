@@ -648,14 +648,14 @@ export function EditImageActionNode({ id, data, selected }: NodeProps) {
           </label>
         </div>
 
-        {/* E52c: slot de referência sempre visível (cliente pediu também pra Roupa e Cenário) */}
+        {/* E52c+E52d: slot de referência em tamanho reduzido (cliente pediu menor) */}
         <div>
           <p className="text-[9px] text-white/40 uppercase tracking-wide mb-1">Imagem referência</p>
           <label className="block cursor-pointer">
             {d.selfRefImageUrl ? (
-              <img src={d.selfRefImageUrl} alt="" className="w-full rounded object-cover aspect-square" />
+              <img src={d.selfRefImageUrl} alt="" className="w-20 mx-auto rounded object-contain" />
             ) : (
-              <div className="w-full flex flex-col items-center gap-1 py-4 rounded border border-dashed border-amber-500/30 hover:border-amber-500/60">
+              <div className="w-full flex flex-col items-center gap-1 py-3 rounded border border-dashed border-amber-500/30 hover:border-amber-500/60">
                 {busyRef ? <Loader2 size={14} className="text-amber-400 animate-spin" /> : <Upload size={14} className="text-amber-400" />}
                 <span className="text-[9px] text-amber-300">{refLabel}</span>
               </div>
@@ -694,9 +694,35 @@ export function EditImageActionNode({ id, data, selected }: NodeProps) {
           {status === 'generating' ? 'Editando…' : 'Editar'}
         </button>
         <p className="text-[9px] text-white/40 text-center">2 cr · nano-banana</p>
-        {status === 'done' && d.resultUrl && <img src={d.resultUrl} alt="" className="w-full rounded" />}
+        {status === 'done' && d.resultUrl && (
+          <div className="space-y-1">
+            <img src={d.resultUrl} alt="" className="w-full rounded" />
+            {/* E52d: botão Baixar pedido pelo cliente — alguns navegadores não baixavam direto do <img> */}
+            <button
+              onClick={async () => {
+                if (!d.resultUrl) return
+                try {
+                  const r = await fetch(d.resultUrl)
+                  const blob = await r.blob()
+                  const a = document.createElement('a')
+                  a.href = URL.createObjectURL(blob)
+                  a.download = `vyral-edit-${Date.now()}.png`
+                  a.click()
+                  URL.revokeObjectURL(a.href)
+                } catch {
+                  window.open(d.resultUrl, '_blank')
+                }
+              }}
+              className="w-full flex items-center justify-center gap-1 py-1 rounded bg-fuchsia-600/30 text-fuchsia-200 text-[10px] font-medium hover:bg-fuchsia-600/50 cursor-pointer"
+            >
+              <Upload size={10} className="rotate-180" /> Baixar imagem
+            </button>
+          </div>
+        )}
         {status === 'error' && <p className="text-[9px] text-red-400 text-center">{d.errorMessage || 'Erro'}</p>}
       </div>
+      {/* E52d: Handle de saída pra poder encadear o resultado da edição em outro node */}
+      <Handle type="source" position={Position.Right} className="!bg-fuchsia-400 !w-2 !h-2" />
     </div>
   )
 }
