@@ -549,6 +549,8 @@ export function PromptNode({ id, data, selected }: NodeProps) {
 
   return (
     <div className={`${baseNodeClass} ${selected ? 'ring-2 ring-primary-500' : ''}`}>
+      {/* E52c: Handle target — cliente pediu Foto→Prompt→Gerar Imagem (encadear) */}
+      <Handle type="target" position={Position.Left} className="!bg-amber-400 !w-2 !h-2" />
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 bg-surface-400 rounded-t-xl">
         <MessageSquare size={14} className="text-amber-400" />
         <span className="text-xs font-semibold text-white">Prompt</span>
@@ -613,7 +615,14 @@ export function EditImageActionNode({ id, data, selected }: NodeProps) {
     { id: 'influencer', label: 'Trocar Influencer', icon: '👤' },
     { id: 'pose', label: 'Trocar Pose', icon: '🤸' },
   ]
-  const needsRef = d.editTemplate === 'influencer' || d.editTemplate === 'pose'
+  // E52c: cliente pediu slot de referência também pra Trocar Roupa e Cenário (pra subir a roupa/cenário desejado)
+  const refHint: Record<string, string> = {
+    roupa: 'Suba a foto da roupa desejada',
+    cenario: 'Suba a foto do cenário desejado',
+    influencer: 'Suba a foto do rosto desejado',
+    pose: 'Suba a foto com a pose desejada',
+  }
+  const refLabel = d.editTemplate ? (refHint[d.editTemplate] || 'Suba uma referência (opcional)') : 'Suba uma referência (opcional)'
 
   return (
     <div className={`${baseNodeClass} ${selected ? 'ring-2 ring-primary-500' : ''}`}>
@@ -639,23 +648,21 @@ export function EditImageActionNode({ id, data, selected }: NodeProps) {
           </label>
         </div>
 
-        {/* E52b: slot de referência — só aparece quando o template precisa (Trocar Influencer/Pose) */}
-        {needsRef && (
-          <div>
-            <p className="text-[9px] text-white/40 uppercase tracking-wide mb-1">Imagem referência (rosto/pose desejada)</p>
-            <label className="block cursor-pointer">
-              {d.selfRefImageUrl ? (
-                <img src={d.selfRefImageUrl} alt="" className="w-full rounded object-cover aspect-square" />
-              ) : (
-                <div className="w-full flex flex-col items-center gap-1 py-4 rounded border border-dashed border-amber-500/30 hover:border-amber-500/60">
-                  {busyRef ? <Loader2 size={14} className="text-amber-400 animate-spin" /> : <Upload size={14} className="text-amber-400" />}
-                  <span className="text-[9px] text-amber-300">Suba a foto de referência</span>
-                </div>
-              )}
-              <input type="file" accept="image/*" className="hidden" onChange={onRefFile} />
-            </label>
-          </div>
-        )}
+        {/* E52c: slot de referência sempre visível (cliente pediu também pra Roupa e Cenário) */}
+        <div>
+          <p className="text-[9px] text-white/40 uppercase tracking-wide mb-1">Imagem referência</p>
+          <label className="block cursor-pointer">
+            {d.selfRefImageUrl ? (
+              <img src={d.selfRefImageUrl} alt="" className="w-full rounded object-cover aspect-square" />
+            ) : (
+              <div className="w-full flex flex-col items-center gap-1 py-4 rounded border border-dashed border-amber-500/30 hover:border-amber-500/60">
+                {busyRef ? <Loader2 size={14} className="text-amber-400 animate-spin" /> : <Upload size={14} className="text-amber-400" />}
+                <span className="text-[9px] text-amber-300">{refLabel}</span>
+              </div>
+            )}
+            <input type="file" accept="image/*" className="hidden" onChange={onRefFile} />
+          </label>
+        </div>
 
         <div className="grid grid-cols-1 gap-1">
           {templates.map(t => (
@@ -773,15 +780,24 @@ export function GenerateVideoActionNode({ id, data, selected }: NodeProps) {
 
         <button
           onClick={() => d.onExecute?.()}
-          disabled={status === 'generating' || !d.ready}
+          disabled={status === 'generating' || status === 'pending' || !d.ready}
           className="w-full py-1.5 rounded bg-neon text-surface-500 text-[11px] font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1"
         >
           {status === 'generating' ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
-          {status === 'generating' ? 'Gerando…' : 'Gerar'}
+          {status === 'generating' ? 'Enviando…' : status === 'pending' ? 'Processando…' : status === 'done' ? 'Regerar' : 'Gerar'}
         </button>
         <p className="text-[9px] text-white/40 text-center">{modeLabel}{mode !== 'grok' ? ` (${credits} cr)` : ''}</p>
+        {/* E52c: vídeo final inline ou loading com mensagem clara + custo */}
+        {status === 'pending' && (
+          <div className="rounded border border-amber-500/30 bg-amber-500/5 p-3 text-center space-y-1.5">
+            <Loader2 size={20} className="animate-spin text-amber-400 mx-auto" />
+            <p className="text-[10px] text-amber-200 font-medium">Seu vídeo está sendo processado</p>
+            <p className="text-[9px] text-white/60 leading-relaxed">Isso pode levar de 1 a 5 minutos e ele aparecerá aqui em seguida.</p>
+            <p className="text-[9px] text-amber-300 font-semibold pt-1 border-t border-amber-500/20">Custo: {credits} {mode === 'grok' ? 'cr/s' : 'cr'}</p>
+          </div>
+        )}
         {status === 'done' && d.resultUrl && <video src={d.resultUrl} controls className="w-full rounded" />}
-        {status === 'done' && !d.resultUrl && <p className="text-[9px] text-amber-400 text-center">Em processamento — veja Histórico</p>}
+        {status === 'done' && !d.resultUrl && <p className="text-[9px] text-amber-400 text-center">Em processamento — recarregue daqui a pouco</p>}
         {status === 'error' && <p className="text-[9px] text-red-400 text-center">{d.errorMessage || 'Erro'}</p>}
       </div>
     </div>
@@ -848,19 +864,22 @@ export function MotionActionNode({ id, data, selected }: NodeProps) {
           <input type="file" accept="image/*" className="hidden" onChange={onImageFile} />
         </label>
 
-        {/* Upload vídeo de referência */}
-        <label className="block cursor-pointer">
-          {d.referenceVideoUrl ? (
-            <video src={d.referenceVideoUrl} className="w-full rounded" muted playsInline />
-          ) : (
-            <div className="flex flex-col items-center gap-1 py-3 rounded border border-dashed border-white/20 hover:border-rose-500/50">
-              {busy ? <Loader2 size={14} className="text-rose-400 animate-spin" /> : <Upload size={14} className="text-rose-400" />}
-              <span className="text-[9px] text-white/60">{busy ? 'Enviando…' : 'Upload vídeo referência'}</span>
-              <span className="text-[9px] text-white/30">MP4 até 30MB</span>
-            </div>
-          )}
-          <input type="file" accept="video/*" className="hidden" onChange={onVideoFile} />
-        </label>
+        {/* E52c: vídeo de referência em tamanho reduzido (cliente pediu) */}
+        <div>
+          <p className="text-[9px] text-white/40 uppercase tracking-wide mb-1">Vídeo de referência</p>
+          <label className="block cursor-pointer">
+            {d.referenceVideoUrl ? (
+              <video src={d.referenceVideoUrl} className="w-24 rounded mx-auto" muted playsInline />
+            ) : (
+              <div className="flex flex-col items-center gap-1 py-3 rounded border border-dashed border-white/20 hover:border-rose-500/50">
+                {busy ? <Loader2 size={14} className="text-rose-400 animate-spin" /> : <Upload size={14} className="text-rose-400" />}
+                <span className="text-[9px] text-white/60">{busy ? 'Enviando…' : 'Upload vídeo referência'}</span>
+                <span className="text-[9px] text-white/30">MP4 até 30MB</span>
+              </div>
+            )}
+            <input type="file" accept="video/*" className="hidden" onChange={onVideoFile} />
+          </label>
+        </div>
 
         <div>
           <p className="text-[9px] text-white/40 mb-1">PROMPT (OPCIONAL)</p>
@@ -875,15 +894,24 @@ export function MotionActionNode({ id, data, selected }: NodeProps) {
 
         <button
           onClick={() => d.onExecute?.()}
-          disabled={status === 'generating' || !d.ready}
+          disabled={status === 'generating' || status === 'pending' || !d.ready}
           className="w-full py-1.5 rounded bg-neon text-surface-500 text-[11px] font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1"
         >
           {status === 'generating' ? <Loader2 size={11} className="animate-spin" /> : <Activity size={11} />}
-          {status === 'generating' ? 'Processando…' : 'Imitar Movimento'}
+          {status === 'generating' ? 'Enviando…' : status === 'pending' ? 'Processando…' : status === 'done' ? 'Regerar' : 'Imitar Movimento'}
         </button>
         <p className="text-[9px] text-white/40 text-center">6 cr/s 720p · Kling Motion</p>
+        {/* E52c: vídeo final inline ou loading com mensagem clara */}
+        {status === 'pending' && (
+          <div className="rounded border border-amber-500/30 bg-amber-500/5 p-3 text-center space-y-1.5">
+            <Loader2 size={20} className="animate-spin text-amber-400 mx-auto" />
+            <p className="text-[10px] text-amber-200 font-medium">Seu vídeo está sendo processado</p>
+            <p className="text-[9px] text-white/60 leading-relaxed">Isso pode levar de 1 a 5 minutos e ele aparecerá aqui em seguida.</p>
+            <p className="text-[9px] text-amber-300 font-semibold pt-1 border-t border-amber-500/20">Custo: 6 cr/s</p>
+          </div>
+        )}
         {status === 'done' && d.resultUrl && <video src={d.resultUrl} controls className="w-full rounded" />}
-        {status === 'done' && !d.resultUrl && <p className="text-[9px] text-amber-400 text-center">Processando — veja Histórico</p>}
+        {status === 'done' && !d.resultUrl && <p className="text-[9px] text-amber-400 text-center">Processando — recarregue daqui a pouco</p>}
         {status === 'error' && <p className="text-[9px] text-red-400 text-center">{d.errorMessage || 'Erro'}</p>}
       </div>
     </div>
@@ -962,8 +990,28 @@ export function ScriptNode({ id, data, selected }: NodeProps) {
         <p className="text-[9px] text-white/40 text-center">10 grátis lifetime · 1 cr depois</p>
 
         {status === 'done' && d.resultText && (
-          <div className="bg-surface-400 border border-white/5 rounded p-2 max-h-32 overflow-y-auto nodrag nowheel">
-            <p className="text-[10px] text-white/80 whitespace-pre-wrap">{d.resultText}</p>
+          <div className="space-y-1">
+            <div className="bg-surface-400 border border-white/5 rounded p-2 max-h-32 overflow-y-auto nodrag nowheel">
+              <p className="text-[10px] text-white/80 whitespace-pre-wrap">{d.resultText}</p>
+            </div>
+            {/* E52c: botão Copiar pedido pelo cliente */}
+            <button
+              onClick={() => {
+                if (d.resultText) {
+                  navigator.clipboard.writeText(d.resultText)
+                  // Feedback visual rápido via state local
+                  const btn = document.activeElement as HTMLButtonElement
+                  if (btn) {
+                    const orig = btn.textContent
+                    btn.textContent = '✓ Copiado'
+                    setTimeout(() => { btn.textContent = orig }, 1500)
+                  }
+                }
+              }}
+              className="w-full flex items-center justify-center gap-1 py-1 rounded bg-violet-600/30 text-violet-200 text-[10px] font-medium hover:bg-violet-600/50 cursor-pointer"
+            >
+              <CopyIcon size={10} /> Copiar roteiro
+            </button>
           </div>
         )}
         {status === 'error' && <p className="text-[9px] text-red-400 text-center">{d.errorMessage || 'Erro'}</p>}

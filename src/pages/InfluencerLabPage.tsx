@@ -18,6 +18,7 @@ import { ArrowLeft, Zap, Coins } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuthStore } from '../stores/auth-store'
+import { supabase } from '../lib/supabase'
 import { invokeRaw } from '../lib/invokeRaw'
 import { ProductNode, AvatarNode, SceneNode, SettingsNode, GenerateNode, ImageNode, PromptNode, EditImageActionNode, GenerateVideoActionNode, MotionActionNode, ScriptNode, NODE_LIBRARY } from '../components/influencer-lab/nodes'
 import { POSES, STYLES, FORMATS, ENHANCEMENTS, SCENARIOS } from '../types/studio'
@@ -41,7 +42,7 @@ const ACTION_NODE_TYPES = new Set(['generate', 'edit-image', 'video', 'motion', 
 
 function InfluencerLabInner() {
   const navigate = useNavigate()
-  const { subscription } = useAuthStore()
+  const { subscription, user } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
@@ -329,8 +330,11 @@ function InfluencerLabInner() {
         } else if (data?.task_id) {
           applyCreditsFromResponse(data)
           const taskId = data.task_id
-          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultUrl: undefined, taskId } } : n))
-          toast.success('Vídeo na fila — acompanhe em Boosters → Histórico')
+          // E52c: status 'pending' (não 'done') enquanto vídeo está sendo gerado.
+          // Realtime subscription abaixo vai atualizar pra 'done' + resultUrl quando
+          // backend marcar completed no credit_usage_log.
+          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'pending', resultUrl: undefined, taskId } } : n))
+          toast.success('Vídeo na fila — vai aparecer no node em 1-5 min')
         } else {
           throw new Error('Resposta inesperada')
         }
@@ -350,6 +354,63 @@ function InfluencerLabInner() {
     }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes.length, edges.length, JSON.stringify(nodes.map(n => ({ id: n.id, data: n.data })))])
+
+  // E52c: Realtime + polling fallback pra nodes com taskId pending (video/motion async).
+  // Quando check-kie-task atualiza credit_usage_log pra completed, encontra o node
+  // que tem esse external_task_id e seta resultUrl + status='done' direto no canvas.
+  useEffect(() => {
+    if (!user?.email) return
+    const pendingTaskIds = nodes
+      .filter(n => (n.data as { status?: string }).status === 'pending' && (n.data as { taskId?: string }).taskId)
+      .map(n => (n.data as { taskId?: string }).taskId)
+      .filter(Boolean) as string[]
+    if (pendingTaskIds.length === 0) return
+
+    // Realtime: instantâneo quando o backend marca completed
+    const channel = supabase.channel(`lab-tasks-${user.email}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'credit_usage_log',
+        filter: `user_email=eq.${user.email}`,
+      }, (payload) => {
+        const row = payload.new as { external_task_id?: string; result_url?: string; status?: string }
+        if (!row?.external_task_id || !pendingTaskIds.includes(row.external_task_id)) return
+        if (row.status === 'completed' && row.result_url) {
+          setNodes(nds => nds.map(n => {
+            const nd = n.data as { taskId?: string; status?: string }
+            if (nd.taskId === row.external_task_id) {
+              return { ...n, data: { ...n.data, status: 'done', resultUrl: row.result_url } }
+            }
+            return n
+          }))
+          toast.success('Vídeo pronto!')
+        } else if (row.status === 'failed') {
+          setNodes(nds => nds.map(n => {
+            const nd = n.data as { taskId?: string }
+            if (nd.taskId === row.external_task_id) {
+              return { ...n, data: { ...n.data, status: 'error', errorMessage: 'Geração falhou' } }
+            }
+            return n
+          }))
+        }
+      })
+      .subscribe()
+
+    // Polling fallback (caso Realtime caia) a cada 15s: chama check-kie-task pra cada pending
+    const poll = setInterval(async () => {
+      const stillPending = nodes
+        .filter(n => (n.data as { status?: string }).status === 'pending' && (n.data as { taskId?: string }).taskId)
+        .map(n => ({ id: n.id, taskId: (n.data as { taskId?: string }).taskId!, type: n.type }))
+      if (stillPending.length === 0) return
+      for (const p of stillPending) {
+        const toolName = p.type === 'video' ? 'veo_video' : p.type === 'motion' ? 'motion_control' : ''
+        try {
+          await invokeRaw('check-kie-task', { task_id: p.taskId, tool_name: toolName })
+        } catch { /* silent */ }
+      }
+    }, 15_000)
+
+    return () => { supabase.removeChannel(channel); clearInterval(poll) }
+  }, [user?.email, nodes, setNodes])
 
   // Persistência leve em localStorage
   useEffect(() => {
