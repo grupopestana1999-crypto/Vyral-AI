@@ -13,19 +13,21 @@ function routeFor(b: BoosterDef): string {
   return `/booster/${b.slug}`
 }
 
-function buildPricingHint(b: BoosterDef, tiers: { tier: string; credits_charged: number; label: string | null }[]): string {
-  if (tiers.length === 0) return b.pricingHint ?? `${b.credits} cr`
+function buildPricingHint(b: BoosterDef, tiers: { tier: string; credits_charged: number; label: string | null; is_active: boolean }[]): string {
+  // E52: filtra apenas tiers ativos pra não mostrar tier legacy desativado (ex: veo_video 'fast' antigo)
+  const activeTiers = tiers.filter(t => t.is_active)
+  if (activeTiers.length === 0) return b.pricingHint ?? `${b.credits} cr`
   // Multi-tier: monta hint dinâmico (ex: "10 cr/s áudio · 7 cr/s sem áudio")
-  if (tiers.length > 1) {
+  if (activeTiers.length > 1) {
     const isPerSecond = b.tool === 'kling_3' || b.tool === 'motion_control' || b.tool === 'grok_video'
     const sep = isPerSecond ? ' cr/s' : ' cr'
-    return tiers
+    return activeTiers
       .filter(t => t.tier !== 'default')
       .map(t => `${t.credits_charged}${sep} ${t.label?.replace(/\(cr.*\)|\(cr\/s\)/g, '').trim() ?? t.tier}`)
       .join(' · ')
   }
   // Single tier
-  const t = tiers[0]
+  const t = activeTiers[0]
   if (b.tool === 'grok_video' || b.tool === 'transcribe_audio') return `${t.credits_charged} cr/s`
   return `${t.credits_charged} cr`
 }

@@ -82,7 +82,7 @@ export const BOOSTERS: BoosterDef[] = [
     description: 'Crie vídeos ultrarrealistas com avatar e áudio sincronizado em segundos',
     videoUrl: 'https://mdueuksfunifyxfqpmdv.supabase.co/storage/v1/object/public/public-media/boosters/video%20do%20BOOSTER%20=%20Avatar%20.mp4',
     credits: 15,
-    pricingHint: 'Lite 15cr / Fast 30cr',
+    pricingHint: '720p 15cr / 1080p 20cr',
     tool: 'veo_video',
     edgeFunction: 'generate-veo-video',
     inputs: [],
