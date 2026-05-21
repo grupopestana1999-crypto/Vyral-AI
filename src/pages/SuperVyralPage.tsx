@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Sparkles, Check, Loader2, Upload, Wand2, ImageIcon, Video, Zap, ArrowRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth-store'
 import { toast } from 'sonner'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { useBoosterSettings } from '../stores/booster-settings-store'
+import { invokeRaw } from '../lib/invokeRaw'
 
 type Step = 'studio_image' | 'edit_image' | 'avatar_creator' | 'skin_enhancer' | 'grok_video' | 'veo_video' | 'kling_3'
 
@@ -75,8 +76,9 @@ const TEMPLATES: WorkflowTemplate[] = [
 
 interface StepRun {
   step: Step
-  status: 'idle' | 'running' | 'success' | 'error'
+  status: 'idle' | 'running' | 'pending' | 'success' | 'error'
   result_url?: string
+  task_id?: string
   error?: string
   credits?: number
 }
@@ -154,32 +156,60 @@ export function SuperVyralPage() {
         ? { image_url: lastResultUrl, category: 'pele', variant: 'sardas' } // default — o avatar creator precisa de categoria
         : { image_url: lastResultUrl, prompt }
 
-      const { data, error } = await supabase.functions.invoke(fnName, { body })
-      if (error || (data as { error?: string })?.error) {
-        const msg = error?.message ?? (data as { error?: string }).error ?? 'erro desconhecido'
+      // E52e: invokeRaw em vez de supabase.functions.invoke. Padrão broken
+      // pendurava em sessões longas (validado em E24/E31/E43).
+      const { data, error } = await invokeRaw<{ task_id?: string; image_url?: string; result_url?: string; credits_charged?: number; credits_remaining?: number; error?: string }>(fnName, body)
+      if (error || data?.error) {
+        const msg = error?.message ?? data?.error ?? 'erro desconhecido'
         setRuns(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'error', error: msg } : r))
         toast.error(`Etapa ${i + 1} falhou: ${msg}`)
         setRunning(false)
         return
       }
       applyCreditsFromResponse(data)
-      const dataObj = data as { task_id?: string; image_url?: string; result_url?: string; credits_charged?: number }
-      const resultUrl = dataObj?.image_url ?? dataObj?.result_url
-      if (isVideo && dataObj?.task_id && !resultUrl) {
-        // Video em fila: marcar pendente; user verá no histórico
-        setRuns(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'success', result_url: undefined, credits: dataObj?.credits_charged } : r))
-        toast.success(`Etapa ${i + 1} enviada pra fila — confira o resultado no histórico do booster (Filmes IA / Avatar Vídeos / Vídeos IA conforme o caso)`)
+      const resultUrl = data?.image_url ?? data?.result_url
+      if (isVideo && data?.task_id && !resultUrl) {
+        // E52e: status 'pending' + task_id. Realtime subscription abaixo vai marcar
+        // 'success' + resultUrl quando o backend completar — workflow não trava mais aqui.
+        const taskId = data.task_id
+        setRuns(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'pending', task_id: taskId, credits: data?.credits_charged } : r))
+        toast.success(`Etapa ${i + 1} entrou na fila (1-5 min)`)
         break
       }
       if (resultUrl) {
         lastResultUrl = resultUrl
-        setRuns(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'success', result_url: resultUrl, credits: dataObj?.credits_charged } : r))
+        setRuns(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'success', result_url: resultUrl, credits: data?.credits_charged } : r))
       }
     }
 
     setRunning(false)
-    toast.success('Workflow concluído!')
+    if (!runs.some(r => r.status === 'pending')) toast.success('Workflow concluído!')
   }
+
+  // E52e: Realtime subscription pra tasks pendentes (vídeos async).
+  // Quando check-kie-task atualiza credit_usage_log pra completed, encontra a etapa
+  // com esse external_task_id e marca success + result_url.
+  useEffect(() => {
+    if (!user?.email) return
+    const pendingTaskIds = runs.filter(r => r.status === 'pending' && r.task_id).map(r => r.task_id!) as string[]
+    if (pendingTaskIds.length === 0) return
+    const channel = supabase.channel(`super-vyral-${user.email}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'credit_usage_log',
+        filter: `user_email=eq.${user.email}`,
+      }, (payload) => {
+        const row = payload.new as { external_task_id?: string; result_url?: string; status?: string }
+        if (!row?.external_task_id || !pendingTaskIds.includes(row.external_task_id)) return
+        if (row.status === 'completed' && row.result_url) {
+          setRuns(prev => prev.map(r => r.task_id === row.external_task_id ? { ...r, status: 'success', result_url: row.result_url } : r))
+          toast.success('Vídeo do workflow ficou pronto!')
+        } else if (row.status === 'failed') {
+          setRuns(prev => prev.map(r => r.task_id === row.external_task_id ? { ...r, status: 'error', error: 'Geração falhou' } : r))
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.email, runs])
 
   function reset() {
     setSelectedTpl(null)
@@ -298,10 +328,11 @@ export function SuperVyralPage() {
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                     r.status === 'success' ? 'bg-green-500/20 text-green-400' :
                     r.status === 'running' ? 'bg-violet-500/20 text-violet-400' :
+                    r.status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
                     r.status === 'error' ? 'bg-red-500/20 text-red-400' :
                     'bg-white/5 text-white/30'
                   }`}>
-                    {r.status === 'running' ? <Loader2 size={14} className="animate-spin" /> :
+                    {r.status === 'running' || r.status === 'pending' ? <Loader2 size={14} className="animate-spin" /> :
                      r.status === 'success' ? <Check size={14} /> :
                      <span className="text-xs font-bold">{idx + 1}</span>}
                   </div>
@@ -310,6 +341,7 @@ export function SuperVyralPage() {
                     <p className="text-[10px] text-white/40">
                       {r.status === 'idle' && 'Aguardando...'}
                       {r.status === 'running' && 'Processando...'}
+                      {r.status === 'pending' && `Em fila (1-5 min)${r.credits ? ` · ${r.credits} cr` : ''}`}
                       {r.status === 'success' && (r.credits ? `${r.credits} cr debitados` : 'Concluído')}
                       {r.status === 'error' && r.error}
                     </p>
