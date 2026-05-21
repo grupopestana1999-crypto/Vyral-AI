@@ -70,8 +70,10 @@ export function VideosIaPage() {
     try {
       // E44: invokeRaw em vez de supabase.functions.invoke — invoke() pendura em
       // sessões longas (vide Pele Realista pré-E43). Padrão alinhado com Edit/Avatar/Pele.
-      const { data, error } = await invokeRaw<{ prompt?: string; error?: string; over_limit?: boolean; uses_lifetime?: number; lifetime_limit?: number; uses_today?: number; limit?: number; credits_remaining?: number }>('enhance-prompt', {
-        description: prompt, type: 'video',
+      // E52: passa max_chars pro backend respeitar limite. Antes Gemini gerava livre e
+      // o slice cortava feio no meio da palavra.
+      const { data, error } = await invokeRaw<{ prompt?: string; truncated?: boolean; error?: string; over_limit?: boolean; uses_lifetime?: number; lifetime_limit?: number; uses_today?: number; limit?: number; credits_remaining?: number }>('enhance-prompt', {
+        description: prompt, type: 'video', max_chars: MAX_PROMPT,
       })
       if (error) throw new Error(error.message)
       if (data?.error) { toast.error(data.error); return }
@@ -80,7 +82,8 @@ export function VideosIaPage() {
         setPrompt(data.prompt.slice(0, MAX_PROMPT))
         const used = typeof data.uses_lifetime === 'number' ? data.uses_lifetime : data.uses_today
         const limit = typeof data.lifetime_limit === 'number' ? data.lifetime_limit : data.limit
-        toast.success(data.over_limit ? 'Prompt melhorado (1 crédito)' : `Prompt melhorado (${used}/${limit} grátis · vida toda)`)
+        if (data.truncated) toast.success('Prompt melhorado e ajustado ao limite de 800 chars')
+        else toast.success(data.over_limit ? 'Prompt melhorado (1 crédito)' : `Prompt melhorado (${used}/${limit} grátis · vida toda)`)
       }
     } catch (err) {
       toast.error('Erro: ' + (err as Error).message)

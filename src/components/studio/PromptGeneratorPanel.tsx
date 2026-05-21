@@ -99,8 +99,10 @@ export function PromptGeneratorPanel({ productName, productImage, resultImage }:
       // virou parte do bug — o await travava aqui quando o auto-refresh interno do
       // client estava pendurado. supabase-js já anexa bearer automaticamente.
       // Promise.race 60s abaixo cobre hang real do invoke.
+      // E52: max_chars=1900 — destino "Veo 3" tem teto de 2000 chars. Margem de 100
+      // chars pra cliente colar/editar sem estourar.
       const invokePromise = supabase.functions.invoke('enhance-prompt', {
-        body: { description, type: 'video', style: videoStyle, duration: '10' },
+        body: { description, type: 'video', style: videoStyle, duration: '10', max_chars: 1900 },
       }).then(r => ({ kind: 'response' as const, ...r }))
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 60_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
@@ -265,6 +267,13 @@ export function PromptGeneratorPanel({ productName, productImage, resultImage }:
 
           {result && (
             <>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-white/40 uppercase tracking-wide">Resultado</p>
+                {/* E52: badge contador chars — destino Veo 3 limita 2000. Verde até 1800, âmbar 1800-2000, vermelho > 2000 */}
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${result.length > 2000 ? 'bg-red-500/20 text-red-300' : result.length > 1800 ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                  {result.length} / 2000 chars
+                </span>
+              </div>
               <pre className="bg-surface-500 border border-white/5 rounded-lg p-3 text-[10px] text-white/80 whitespace-pre-wrap font-mono max-h-72 overflow-y-auto">
                 {result}
               </pre>

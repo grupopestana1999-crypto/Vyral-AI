@@ -79,15 +79,16 @@ export function FilmesIaPage() {
     try {
       // E44: invokeRaw em vez de supabase.functions.invoke — invoke() pendura em
       // sessões longas. Mesma migração do EditImagePage/PeleUltraPage pós-E31/E43.
-      const { data, error } = await invokeRaw<{ prompt?: string; error?: string; credits_remaining?: number }>('enhance-prompt', {
-        description: prompt, type: 'video',
+      // E52: max_chars no body pra Gemini respeitar limite (era cortado feio com .slice)
+      const { data, error } = await invokeRaw<{ prompt?: string; truncated?: boolean; error?: string; credits_remaining?: number }>('enhance-prompt', {
+        description: prompt, type: 'video', max_chars: MAX_PROMPT,
       })
       if (error) throw new Error(error.message)
       if (data?.error) { toast.error(data.error); return }
       if (typeof data?.prompt === 'string') {
         applyCreditsFromResponse(data)
         setPrompt(data.prompt.slice(0, MAX_PROMPT))
-        toast.success('Prompt melhorado!')
+        toast.success(data.truncated ? `Prompt melhorado e ajustado ao limite (${MAX_PROMPT} chars)` : 'Prompt melhorado!')
       }
     } catch (err) {
       toast.error('Erro: ' + (err as Error).message)

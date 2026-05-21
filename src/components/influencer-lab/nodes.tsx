@@ -34,15 +34,23 @@ function NodeHeaderActions({ id }: { id: string }) {
 
 export function ProductNode({ id, data, selected }: NodeProps) {
   const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const d = data as { productId?: string; productName?: string; imageUrl?: string }
 
   useEffect(() => {
-    if (open && products.length === 0) {
+    if (open && products.length === 0 && !loading) {
+      setLoading(true)
+      setLoadError(null)
       supabase.from('products').select('*').eq('is_active', true).order('heat_score', { ascending: false }).limit(30)
-        .then(({ data }) => setProducts((data as Product[]) || []))
+        .then(({ data, error }) => {
+          if (error) setLoadError(error.message || 'Erro ao carregar produtos')
+          else setProducts((data as Product[]) || [])
+          setLoading(false)
+        })
     }
-  }, [open, products.length])
+  }, [open, products.length, loading])
 
   function select(p: Product) {
     window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { productId: p.id, productName: p.name, imageUrl: p.image_url } } }))
@@ -73,14 +81,22 @@ export function ProductNode({ id, data, selected }: NodeProps) {
       </div>
       {open && (
         <div className="nodrag nowheel absolute left-full top-0 ml-2 w-72 max-h-96 overflow-y-auto bg-surface-400 border border-white/10 rounded-xl shadow-2xl p-2 z-50">
-          <div className="grid grid-cols-2 gap-1">
-            {products.map(p => (
-              <button key={p.id} onClick={() => select(p)} className="p-1 rounded hover:bg-white/5 cursor-pointer">
-                <img src={p.image_url} alt="" className="w-full aspect-square rounded object-cover" />
-                <p className="text-[9px] text-white/60 mt-0.5 truncate">{p.name}</p>
-              </button>
-            ))}
-          </div>
+          {loading ? (
+            <div className="flex items-center justify-center py-6 text-[10px] text-white/40 gap-1.5"><Loader2 size={12} className="animate-spin text-primary-400" /> Carregando…</div>
+          ) : loadError ? (
+            <p className="text-[10px] text-red-400 text-center py-4 px-2">Erro: {loadError}</p>
+          ) : products.length === 0 ? (
+            <p className="text-[10px] text-white/50 text-center py-4">Nenhum produto cadastrado ainda. Cadastre em Radar de Oportunidades.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-1">
+              {products.map(p => (
+                <button key={p.id} onClick={() => select(p)} className="p-1 rounded hover:bg-white/5 cursor-pointer">
+                  <img src={p.image_url} alt="" className="w-full aspect-square rounded object-cover" />
+                  <p className="text-[9px] text-white/60 mt-0.5 truncate">{p.name}</p>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
       <Handle type="source" position={Position.Right} className="!bg-orange-400 !w-2 !h-2" />
@@ -91,6 +107,8 @@ export function ProductNode({ id, data, selected }: NodeProps) {
 // AvatarNode (ex-"Influencer"): renomeado pra "Avatar" + tab Galeria/Upload
 export function AvatarNode({ id, data, selected }: NodeProps) {
   const [avatars, setAvatars] = useState<Avatar[]>([])
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<'galeria' | 'upload'>('galeria')
   const [gender, setGender] = useState<'female' | 'male'>('female')
@@ -98,11 +116,17 @@ export function AvatarNode({ id, data, selected }: NodeProps) {
   const d = data as { avatarId?: string; avatarName?: string; imageUrl?: string; gender?: 'female' | 'male' }
 
   useEffect(() => {
-    if (open && tab === 'galeria' && avatars.length === 0) {
-      supabase.from('avatars').select('*').eq('is_active', true)
-        .then(({ data }) => setAvatars((data as Avatar[]) || []))
+    if (open && tab === 'galeria' && avatars.length === 0 && !loading) {
+      setLoading(true)
+      setLoadError(null)
+      supabase.from('avatars').select('*').eq('is_active', true).limit(40)
+        .then(({ data, error }) => {
+          if (error) setLoadError(error.message || 'Erro ao carregar avatares')
+          else setAvatars((data as Avatar[]) || [])
+          setLoading(false)
+        })
     }
-  }, [open, tab, avatars.length])
+  }, [open, tab, avatars.length, loading])
 
   function select(a: Avatar) {
     window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { avatarId: a.id, avatarName: a.name, imageUrl: a.image_url, gender: a.gender } } }))
@@ -156,14 +180,22 @@ export function AvatarNode({ id, data, selected }: NodeProps) {
                 <button onClick={() => setGender('female')} className={`flex-1 py-1 rounded text-[10px] ${gender === 'female' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Feminino</button>
                 <button onClick={() => setGender('male')} className={`flex-1 py-1 rounded text-[10px] ${gender === 'male' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Masculino</button>
               </div>
-              <div className="grid grid-cols-2 gap-1">
-                {filtered.map(a => (
-                  <button key={a.id} onClick={() => select(a)} className="p-1 rounded hover:bg-white/5 cursor-pointer">
-                    <img src={a.image_url} alt="" className="w-full aspect-square rounded object-cover" />
-                    <p className="text-[9px] text-white/60 mt-0.5 truncate">{a.name}</p>
-                  </button>
-                ))}
-              </div>
+              {loading ? (
+                <div className="flex items-center justify-center py-6 text-[10px] text-white/40 gap-1.5"><Loader2 size={12} className="animate-spin text-primary-400" /> Carregando…</div>
+              ) : loadError ? (
+                <p className="text-[10px] text-red-400 text-center py-4 px-2">Erro: {loadError}</p>
+              ) : filtered.length === 0 ? (
+                <p className="text-[10px] text-white/50 text-center py-4">Nenhum avatar {gender === 'female' ? 'feminino' : 'masculino'} disponível. Suba uma foto na aba Upload.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-1">
+                  {filtered.map(a => (
+                    <button key={a.id} onClick={() => select(a)} className="p-1 rounded hover:bg-white/5 cursor-pointer">
+                      <img src={a.image_url} alt="" className="w-full aspect-square rounded object-cover" />
+                      <p className="text-[9px] text-white/60 mt-0.5 truncate">{a.name}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
             </>
           ) : (
             <label className="flex flex-col items-center gap-2 py-8 rounded border border-dashed border-white/20 hover:border-primary-500/50 cursor-pointer">
@@ -577,10 +609,11 @@ export function EditImageActionNode({ id, data, selected }: NodeProps) {
 }
 
 // GenerateVideoActionNode: self-contained com prompt + dropdown modelo + 2 avisos visíveis
+// E52: alinhado com Avatar Vídeos pós-E48d — Veo 3.1 Lite 720p (15cr) ou 1080p (20cr) + Grok (2cr/s)
 export function GenerateVideoActionNode({ id, data, selected }: NodeProps) {
-  const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean; mode?: 'veo-lite' | 'veo-fast' | 'grok'; selfImageUrl?: string; ownPrompt?: string }
+  const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean; mode?: 'veo-720p' | 'veo-1080p' | 'grok'; selfImageUrl?: string; ownPrompt?: string }
   const [busy, setBusy] = useState(false)
-  const mode = d.mode || 'veo-lite'
+  const mode = d.mode || 'veo-720p'
   const status = d.status || 'idle'
 
   function update(patch: Record<string, unknown>) {
@@ -596,8 +629,8 @@ export function GenerateVideoActionNode({ id, data, selected }: NodeProps) {
     } finally { setBusy(false); e.target.value = '' }
   }
 
-  const credits = mode === 'veo-fast' ? 30 : mode === 'grok' ? 2 : 15
-  const modeLabel = mode === 'veo-fast' ? 'Veo 3.1 Fast — 30 créditos' : mode === 'grok' ? 'Grok IA — 2 cr/s' : 'Veo 3.1 Lite — 15 créditos'
+  const credits = mode === 'veo-1080p' ? 20 : mode === 'grok' ? 2 : 15
+  const modeLabel = mode === 'veo-1080p' ? 'Veo 3.1 Lite 1080p — 20 créditos' : mode === 'grok' ? 'Grok IA — 2 cr/s' : 'Veo 3.1 Lite 720p — 15 créditos'
 
   return (
     <div className={`${baseNodeClass} ${selected ? 'ring-2 ring-primary-500' : ''}`}>
@@ -644,8 +677,8 @@ export function GenerateVideoActionNode({ id, data, selected }: NodeProps) {
             onChange={e => update({ mode: e.target.value })}
             className="nodrag w-full p-1.5 bg-surface-400 border border-blue-500/40 rounded text-[10px] text-white focus:outline-none focus:border-blue-500"
           >
-            <option value="veo-lite">🎬 Veo 3.1 Lite — 15 créditos</option>
-            <option value="veo-fast">🎬 Veo 3.1 Fast — 30 créditos</option>
+            <option value="veo-720p">🎬 Veo 3.1 Lite 720p — 15 cr</option>
+            <option value="veo-1080p">🎬 Veo 3.1 Lite 1080p — 20 cr</option>
             <option value="grok">⚡ Grok IA — 2 cr/s</option>
           </select>
         </div>

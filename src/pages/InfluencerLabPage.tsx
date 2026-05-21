@@ -263,13 +263,14 @@ function InfluencerLabInner() {
           const finalPrompt = [templatePrompt, nd.editPrompt?.trim()].filter(Boolean).join(' ')
           payload = { image_url: imgUrl, edit_prompt: finalPrompt || 'Aprimorar a imagem' }
         } else if (node.type === 'video') {
-          const mode = nd.mode || 'veo-lite'
+          // E52: alinhado com Avatar Vídeos pós-E48d — backend espera resolution: 720p|1080p
+          const mode = nd.mode || 'veo-720p'
           if (mode === 'grok') {
             endpoint = 'generate-grok-video'
             payload = { prompt: promptText, image_url: imgUrl }
           } else {
             endpoint = 'generate-veo-video'
-            payload = { prompt: promptText, image_url: imgUrl, mode: mode === 'veo-fast' ? 'fast' : 'lite' }
+            payload = { prompt: promptText, image_url: imgUrl, resolution: mode === 'veo-1080p' ? '1080p' : '720p' }
           }
         } else if (node.type === 'motion') {
           endpoint = 'generate-motion-video'
