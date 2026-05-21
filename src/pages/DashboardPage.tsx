@@ -12,7 +12,7 @@ const TIPS = [
   { title: 'Foque em categorias com alta demanda', tag: 'Tendência', text: 'Beleza, Roupas e Equipamentos costumam ter os melhores resultados no TikTok Shop.' },
 ]
 
-const COMMUNITY_URL = 'https://chat.whatsapp.com/JgTPSFWSEUG0MzfsgYxz2A?mode=gi_t'
+const COMMUNITY_URL = 'https://chat.whatsapp.com/HA2D0OQnnYr27rduhDGKgo?mode=gi_t'
 const TRAINING_URL = 'https://hotmart.com/pt-br/club/area-de-membros-vyral-ai'
 
 interface FeatureCard {

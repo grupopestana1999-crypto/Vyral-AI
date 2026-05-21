@@ -13,17 +13,25 @@ function routeFor(b: BoosterDef): string {
   return `/booster/${b.slug}`
 }
 
+// E52b: rótulos curtos pros tiers conhecidos (sem repetir info do label completo)
+const TIER_SHORT_LABEL: Record<string, string> = {
+  'audio': 'c/ áudio',
+  'no_audio': 's/ áudio',
+  '720p': '720p',
+  '1080p': '1080p',
+}
+
 function buildPricingHint(b: BoosterDef, tiers: { tier: string; credits_charged: number; label: string | null; is_active: boolean }[]): string {
-  // E52: filtra apenas tiers ativos pra não mostrar tier legacy desativado (ex: veo_video 'fast' antigo)
+  // E52: filtra apenas tiers ativos pra não mostrar tier legacy desativado
   const activeTiers = tiers.filter(t => t.is_active)
   if (activeTiers.length === 0) return b.pricingHint ?? `${b.credits} cr`
-  // Multi-tier: monta hint dinâmico (ex: "10 cr/s áudio · 7 cr/s sem áudio")
+  // E52b: cliente pediu descrição mais curta. Usa nome do tier (curto) em vez do label completo
   if (activeTiers.length > 1) {
     const isPerSecond = b.tool === 'kling_3' || b.tool === 'motion_control' || b.tool === 'grok_video'
-    const sep = isPerSecond ? ' cr/s' : ' cr'
+    const sep = isPerSecond ? 'cr/s' : 'cr'
     return activeTiers
       .filter(t => t.tier !== 'default')
-      .map(t => `${t.credits_charged}${sep} ${t.label?.replace(/\(cr.*\)|\(cr\/s\)/g, '').trim() ?? t.tier}`)
+      .map(t => `${TIER_SHORT_LABEL[t.tier] ?? t.tier} ${t.credits_charged}${sep}`)
       .join(' · ')
   }
   // Single tier

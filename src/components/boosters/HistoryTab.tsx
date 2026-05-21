@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Loader2, Download, RefreshCw, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../stores/auth-store'
+import { invokeRaw } from '../../lib/invokeRaw'
 import { toast } from 'sonner'
 
 interface HistoryItem {
@@ -52,9 +53,7 @@ export function HistoryTab({ tool, mediaType = 'video', aspectRatio = '16:9', re
   // antes do polling pegar).
   useEffect(() => { load() }, [load, refreshTrigger])
 
-  // E48d: polling a cada 8s (era 30s — cliente reportou que Kie ficava pronto e
-  // app demorava até 1min pra mostrar). 8s mantém latência percebida em ~4s média
-  // sem pesar muito no backend (check-kie-task é leve).
+  // E52b: polling de fallback a cada 8s (Realtime cobre 95% dos casos abaixo).
   useEffect(() => {
     if (!items.some(i => i.status === 'pending')) return
     const t = setInterval(refreshPending, 8_000)
@@ -62,19 +61,45 @@ export function HistoryTab({ tool, mediaType = 'video', aspectRatio = '16:9', re
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items])
 
+  // E52b: Realtime subscription. Quando check-kie-task atualiza credit_usage_log
+  // (pending → completed/failed) o frontend reage INSTANTANEAMENTE sem esperar
+  // o tick de 8s. Cliente reportou "vídeo só aparece após reload" mesmo com Kie
+  // pronto — root cause era polling pendurado via supabase.functions.invoke (que
+  // pendura em sessões longas, padrão validado em E24/E31/E43).
+  useEffect(() => {
+    if (!user?.email) return
+    const channel = supabase.channel(`history-${tool}-${user.email}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'credit_usage_log',
+        filter: `user_email=eq.${user.email}`,
+      }, (payload) => {
+        const row = payload.new as { tool_name?: string; status?: string }
+        if (row?.tool_name === tool && (row.status === 'completed' || row.status === 'failed')) {
+          load()
+        }
+      })
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'credit_usage_log',
+        filter: `user_email=eq.${user.email}`,
+      }, (payload) => {
+        const row = payload.new as { tool_name?: string }
+        if (row?.tool_name === tool) load()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.email, tool, load])
+
   async function refreshPending() {
     const pending = items.filter(i => i.status === 'pending' && i.external_task_id)
     if (pending.length === 0) return
     setRefreshing(true)
     try {
-      // E24: migrado de fetch raw + Authorization manual pra supabase.functions.invoke().
-      // fetch raw sem AbortController travava polling em sessões longas e empilhava
-      // requests pendurados que sufocavam o websocket compartilhado do client.
+      // E52b: invokeRaw em vez de supabase.functions.invoke. invoke() pendura
+      // silenciosamente em sessões longas (validado em E24/E31). Sem isso o
+      // polling de 8s nunca disparava a request HTTP → app só atualizava com reload.
       await Promise.all(pending.map(async (it) => {
         try {
-          await supabase.functions.invoke('check-kie-task', {
-            body: { task_id: it.external_task_id, tool_name: tool },
-          })
+          await invokeRaw('check-kie-task', { task_id: it.external_task_id, tool_name: tool })
         } catch { /* silent */ }
       }))
       await load()

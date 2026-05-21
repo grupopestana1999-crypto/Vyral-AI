@@ -18,7 +18,7 @@ import { ArrowLeft, Zap, Coins } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuthStore } from '../stores/auth-store'
-import { supabase } from '../lib/supabase'
+import { invokeRaw } from '../lib/invokeRaw'
 import { ProductNode, AvatarNode, SceneNode, SettingsNode, GenerateNode, ImageNode, PromptNode, EditImageActionNode, GenerateVideoActionNode, MotionActionNode, ScriptNode, NODE_LIBRARY } from '../components/influencer-lab/nodes'
 import { POSES, STYLES, FORMATS, ENHANCEMENTS, SCENARIOS } from '../types/studio'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
@@ -143,23 +143,36 @@ function InfluencerLabInner() {
   function isActionReady(node: Node): { ready: boolean; hint?: string } {
     const a = ancestorsOf(node.id)
     if (node.type === 'generate') {
+      // E52b: Settings agora é OPCIONAL (cliente pediu). Se ausente, usa defaults em executeAction.
       const product = a.find(n => n.type === 'product')
       const avatar = a.find(n => n.type === 'avatar')
       const scene = a.find(n => n.type === 'scene')
-      const settings = a.find(n => n.type === 'settings')
-      const ok = product && avatar && scene && settings
-        && (product.data as { productId?: string }).productId
-        && (avatar.data as { avatarId?: string }).avatarId
+      const ok = product && avatar && scene
+        && (product.data as { productId?: string; imageUrl?: string }).imageUrl
+        && (avatar.data as { avatarId?: string; imageUrl?: string }).imageUrl
         && ((scene.data as { scenarioId?: string; customPrompt?: string }).scenarioId || (scene.data as { customPrompt?: string }).customPrompt)
-      return { ready: !!ok, hint: 'Conecte Produto + Influencer + Cena + Ajustes' }
+      return { ready: !!ok, hint: 'Conecte Produto + Influencer + Cena (Ajustes é opcional)' }
+    }
+    // E52b: helper pra extrair imageUrl de qualquer ancestor relevante (incluindo Gerar Imagem)
+    function findAncestorImg(): string | undefined {
+      for (const n of a) {
+        if (n.type === 'image' || n.type === 'product' || n.type === 'avatar') {
+          const u = (n.data as { imageUrl?: string }).imageUrl
+          if (u) return u
+        }
+        if (n.type === 'generate') {
+          const u = (n.data as { resultUrl?: string }).resultUrl
+          if (u) return u
+        }
+      }
+      return undefined
     }
     if (node.type === 'edit-image') {
-      // Self-contained: imagem upload no próprio node (selfImageUrl) ou via conexão Image/Product/Avatar
+      // Self-contained: imagem upload no próprio node (selfImageUrl) ou via conexão
       const selfImg = (node.data as { selfImageUrl?: string }).selfImageUrl
       const editPrompt = ((node.data as { editPrompt?: string }).editPrompt || '').trim()
       const editTemplate = (node.data as { editTemplate?: string }).editTemplate
-      const ancestor = a.find(n => n.type === 'image' || n.type === 'product' || n.type === 'avatar')
-      const ancestorImg = ancestor && (ancestor.data as { imageUrl?: string }).imageUrl
+      const ancestorImg = findAncestorImg()
       const hasImage = !!(selfImg || ancestorImg)
       const hasInstruction = !!editTemplate || editPrompt.length > 0
       return { ready: hasImage && hasInstruction, hint: 'Conecte uma imagem ou faça upload + selecione edição' }
@@ -167,8 +180,7 @@ function InfluencerLabInner() {
     if (node.type === 'video') {
       // Self-contained: prompt no próprio node + imagem (self ou conectada)
       const selfImg = (node.data as { selfImageUrl?: string }).selfImageUrl
-      const ancestor = a.find(n => n.type === 'image' || n.type === 'product' || n.type === 'avatar')
-      const ancestorImg = ancestor && (ancestor.data as { imageUrl?: string }).imageUrl
+      const ancestorImg = findAncestorImg()
       const promptN = a.find(n => n.type === 'prompt')
       const ownPrompt = ((node.data as { ownPrompt?: string }).ownPrompt || '').trim()
       const ancestorPrompt = promptN && ((promptN.data as { prompt?: string }).prompt || '').trim()
@@ -179,8 +191,7 @@ function InfluencerLabInner() {
     if (node.type === 'motion') {
       // Self-contained: vídeo de referência no próprio node + imagem do personagem
       const selfImg = (node.data as { selfImageUrl?: string }).selfImageUrl
-      const ancestor = a.find(n => n.type === 'image' || n.type === 'product' || n.type === 'avatar')
-      const ancestorImg = ancestor && (ancestor.data as { imageUrl?: string }).imageUrl
+      const ancestorImg = findAncestorImg()
       const refVideo = (node.data as { referenceVideoUrl?: string }).referenceVideoUrl
       return { ready: !!(selfImg || ancestorImg) && !!refVideo, hint: 'Conecte uma imagem + suba vídeo de referência' }
     }
@@ -197,9 +208,9 @@ function InfluencerLabInner() {
     setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'generating', errorMessage: undefined } } : n))
 
     try {
-      // getSession força refresh JWT antes do invoke (bug fix invoke-pendurado)
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('sessão expirada')
+      // E52b: removido `await supabase.auth.getSession()` defensivo — invokeRaw
+      // (abaixo) lê token do localStorage e não precisa de refresh manual. O
+      // getSession era exatamente o padrão que pendurava em sessões longas (E24).
 
       let endpoint = ''
       let payload: Record<string, unknown> = {}
@@ -208,11 +219,12 @@ function InfluencerLabInner() {
         const product = a.find(n => n.type === 'product')!
         const avatar = a.find(n => n.type === 'avatar')!
         const scene = a.find(n => n.type === 'scene')!
-        const settings = a.find(n => n.type === 'settings')!
+        // E52b: Settings é opcional. Se ausente, usa defaults razoáveis.
+        const settings = a.find(n => n.type === 'settings')
         const pd = product.data as { productId?: string; productName?: string; imageUrl?: string }
         const ad = avatar.data as { avatarId?: string; imageUrl?: string; gender?: string }
         const sd = scene.data as { scenarioId?: string; scenarioName?: string; customPrompt?: string }
-        const td = settings.data as { pose: string; style: string; enhancements: string[]; format: string; additionalInfo?: string }
+        const td = (settings?.data ?? {}) as { pose?: string; style?: string; enhancements?: string[]; format?: string; additionalInfo?: string }
         const sceneHint = sd.scenarioId
           ? SCENARIOS.find(s => s.id === sd.scenarioId)?.promptHint || sd.scenarioName
           : sd.customPrompt
@@ -221,10 +233,10 @@ function InfluencerLabInner() {
           product_image: pd.imageUrl,
           avatar_image: ad.imageUrl,
           scene: sceneHint,
-          pose: POSES.find(p => p.id === td.pose)?.name || td.pose,
-          style: STYLES.find(s => s.id === td.style)?.name || td.style,
-          enhancements: td.enhancements.map(e => ENHANCEMENTS.find(x => x.id === e)?.name).filter(Boolean).join(', '),
-          format: FORMATS.find(f => f.id === td.format)?.id || td.format,
+          pose: POSES.find(p => p.id === (td.pose ?? 'frente'))?.name || td.pose || 'Frente',
+          style: STYLES.find(s => s.id === (td.style ?? 'casual'))?.name || td.style || 'Casual',
+          enhancements: (td.enhancements ?? []).map(e => ENHANCEMENTS.find(x => x.id === e)?.name).filter(Boolean).join(', '),
+          format: FORMATS.find(f => f.id === (td.format ?? '9:16'))?.id || td.format || '9:16',
           additionalInfo: td.additionalInfo || '',
         }
       } else if (node.type === 'script') {
@@ -242,10 +254,18 @@ function InfluencerLabInner() {
         payload = { description, type: 'video', style: sd.estilo || 'ugc' }
       } else {
         // Actions self-contained: edit-image / video / motion. Aceitam dados próprios OU conectados.
-        const ancestorImg = a.find(n => n.type === 'image' || n.type === 'product' || n.type === 'avatar')
+        // E52b: também aceita conectar de Gerar Imagem (lê resultUrl) — permite encadeamento.
+        const ancestorImg = a.find(n => {
+          if (n.type === 'image' || n.type === 'product' || n.type === 'avatar') return true
+          if (n.type === 'generate' && (n.data as { resultUrl?: string }).resultUrl) return true
+          return false
+        })
         const promptN = a.find(n => n.type === 'prompt')
-        const nd = node.data as { selfImageUrl?: string; ownPrompt?: string; editPrompt?: string; editTemplate?: string; referenceVideoUrl?: string; mode?: string }
-        const imgUrl = nd.selfImageUrl || (ancestorImg?.data as { imageUrl?: string } | undefined)?.imageUrl
+        const nd = node.data as { selfImageUrl?: string; selfRefImageUrl?: string; ownPrompt?: string; editPrompt?: string; editTemplate?: string; referenceVideoUrl?: string; mode?: string }
+        const ancestorImgUrl = ancestorImg?.type === 'generate'
+          ? (ancestorImg.data as { resultUrl?: string }).resultUrl
+          : (ancestorImg?.data as { imageUrl?: string } | undefined)?.imageUrl
+        const imgUrl = nd.selfImageUrl || ancestorImgUrl
         const ownPrompt = nd.ownPrompt?.trim()
         const ancestorPrompt = (promptN?.data as { prompt?: string } | undefined)?.prompt?.trim()
         const promptText = ownPrompt || ancestorPrompt || ''
@@ -261,7 +281,10 @@ function InfluencerLabInner() {
           }
           const templatePrompt = nd.editTemplate ? TEMPLATE_PROMPTS[nd.editTemplate] : ''
           const finalPrompt = [templatePrompt, nd.editPrompt?.trim()].filter(Boolean).join(' ')
-          payload = { image_url: imgUrl, edit_prompt: finalPrompt || 'Aprimorar a imagem' }
+          // E52b: passa reference_images quando há foto de referência (necessário pra Trocar
+          // Influencer/Pose funcionar — backend v37 espera Replicate face-swap/controlnet-pose)
+          const referenceImages = nd.selfRefImageUrl ? [nd.selfRefImageUrl] : []
+          payload = { image_url: imgUrl, edit_prompt: finalPrompt || 'Aprimorar a imagem', template_id: nd.editTemplate, reference_images: referenceImages }
         } else if (node.type === 'video') {
           // E52: alinhado com Avatar Vídeos pós-E48d — backend espera resolution: 720p|1080p
           const mode = nd.mode || 'veo-720p'
@@ -278,9 +301,12 @@ function InfluencerLabInner() {
         }
       }
 
-      // invoke + Promise.race timeout 90s — fix bug invoke-pendurado
-      const invokePromise = supabase.functions.invoke(endpoint, { body: payload })
-        .then(r => ({ kind: 'response' as const, ...r }))
+      // E52b: invokeRaw em vez de supabase.functions.invoke — invoke pendura
+      // silenciosamente em sessões longas (validado em E24/E31). Cliente reportou
+      // Lab nodes "carregando eternamente" — root cause confirmado.
+      type LabResponse = { prompt?: string; image_url?: string; task_id?: string; result?: string; error?: string; credits_remaining?: number }
+      const invokePromise = invokeRaw<LabResponse>(endpoint, payload)
+        .then(r => ({ kind: 'response' as const, data: r.data, error: r.error }))
       const timeoutPromise = new Promise<{ kind: 'timeout' }>(res => setTimeout(() => res({ kind: 'timeout' }), 180_000))
       const result = await Promise.race([invokePromise, timeoutPromise])
       if (result.kind === 'timeout') throw new Error('Tempo excedido. A geração pode estar em andamento — tente de novo daqui a pouco.')
@@ -291,7 +317,8 @@ function InfluencerLabInner() {
       // Script node retorna texto puro (data.prompt). Outros retornam image_url ou task_id.
       if (node.type === 'script' && typeof data?.prompt === 'string') {
         applyCreditsFromResponse(data)
-        setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultText: data.prompt } } : n))
+        const promptText = data.prompt
+        setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultText: promptText } } : n))
         toast.success('Roteiro gerado!')
       } else {
         const resultUrl = data?.image_url || (data?.task_id ? undefined : data?.result)
@@ -301,7 +328,8 @@ function InfluencerLabInner() {
           toast.success('Pronto!')
         } else if (data?.task_id) {
           applyCreditsFromResponse(data)
-          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultUrl: undefined, taskId: data.task_id } } : n))
+          const taskId = data.task_id
+          setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'done', resultUrl: undefined, taskId } } : n))
           toast.success('Vídeo na fila — acompanhe em Boosters → Histórico')
         } else {
           throw new Error('Resposta inesperada')
@@ -397,7 +425,7 @@ function InfluencerLabInner() {
           })}
           <div className="pt-3 mt-3 border-t border-white/5">
             <p className="text-[9px] text-white/40 leading-relaxed">
-              Arraste os nodes, conecte os pontos (⚪) saindo pra direita e chegando na esquerda do próximo. O nó Executar precisa ter Produto, Avatar, Cena e Ajustes conectados.
+              Arraste os nodes, conecte os pontos (⚪) saindo pra direita e chegando na esquerda do próximo. Gerar Imagem precisa de Produto + Avatar + Cena (Ajustes é opcional). Double-click numa ligação pra cancelar.
             </p>
           </div>
         </aside>
@@ -415,6 +443,8 @@ function InfluencerLabInner() {
             fitView
             colorMode="dark"
             proOptions={{ hideAttribution: true }}
+            // E52b: cliente pediu pra cancelar uma ligação dando double-click nela.
+            onEdgeDoubleClick={(_, edge) => setEdges(eds => eds.filter(e => e.id !== edge.id))}
           >
             <Background color="#2a2a3a" />
             <Controls className="!bg-surface-300 !border-white/10" />

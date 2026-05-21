@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Package, User, Image as ImageIcon, Sliders, Sparkles, Loader2, CheckCircle2, Upload, Wand2, Pencil, Film, Activity, MessageSquare, Copy as CopyIcon, Trash2, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { invokeRaw } from '../../lib/invokeRaw'
 import { POSES, STYLES, FORMATS, ENHANCEMENTS, SCENARIOS } from '../../types/studio'
 import type { Product, Avatar } from '../../types/database'
 import { resizeImageFile } from '../../lib/imageUtils'
@@ -37,10 +38,13 @@ export function ProductNode({ id, data, selected }: NodeProps) {
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  // E52b: cliente pediu tab Upload (igual AvatarNode)
+  const [tab, setTab] = useState<'galeria' | 'upload'>('galeria')
+  const [busy, setBusy] = useState(false)
   const d = data as { productId?: string; productName?: string; imageUrl?: string }
 
   useEffect(() => {
-    if (open && products.length === 0 && !loading) {
+    if (open && tab === 'galeria' && products.length === 0 && !loading) {
       setLoading(true)
       setLoadError(null)
       supabase.from('products').select('*').eq('is_active', true).order('heat_score', { ascending: false }).limit(30)
@@ -50,11 +54,22 @@ export function ProductNode({ id, data, selected }: NodeProps) {
           setLoading(false)
         })
     }
-  }, [open, products.length, loading])
+  }, [open, tab, products.length, loading])
 
   function select(p: Product) {
     window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { productId: p.id, productName: p.name, imageUrl: p.image_url } } }))
     setOpen(false)
+  }
+
+  // E52b: upload livre — cliente sobe foto do produto direto no node
+  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    setBusy(true)
+    try {
+      const url = await resizeImageFile(file, 1280, 0.85)
+      window.dispatchEvent(new CustomEvent('lab-update-node', { detail: { id, data: { productId: 'upload', productName: 'Produto customizado', imageUrl: url } } }))
+      setOpen(false)
+    } finally { setBusy(false); e.target.value = '' }
   }
 
   return (
@@ -81,12 +96,23 @@ export function ProductNode({ id, data, selected }: NodeProps) {
       </div>
       {open && (
         <div className="nodrag nowheel absolute left-full top-0 ml-2 w-72 max-h-96 overflow-y-auto bg-surface-400 border border-white/10 rounded-xl shadow-2xl p-2 z-50">
-          {loading ? (
+          <div className="flex gap-1 mb-2">
+            <button onClick={() => setTab('galeria')} className={`flex-1 py-1 rounded text-[10px] ${tab === 'galeria' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Galeria</button>
+            <button onClick={() => setTab('upload')} className={`flex-1 py-1 rounded text-[10px] ${tab === 'upload' ? 'bg-primary-600 text-white' : 'text-white/50'}`}>Upload</button>
+          </div>
+          {tab === 'upload' ? (
+            <label className="flex flex-col items-center gap-2 py-8 rounded border border-dashed border-white/20 hover:border-orange-500/50 cursor-pointer">
+              {busy ? <Loader2 size={18} className="text-orange-400 animate-spin" /> : <Upload size={18} className="text-orange-400" />}
+              <span className="text-[10px] text-white/60">{busy ? 'Enviando…' : 'Subir foto do produto'}</span>
+              <span className="text-[9px] text-white/30">PNG, JPG até 7MB</span>
+              <input type="file" accept="image/*" className="hidden" onChange={onUpload} />
+            </label>
+          ) : loading ? (
             <div className="flex items-center justify-center py-6 text-[10px] text-white/40 gap-1.5"><Loader2 size={12} className="animate-spin text-primary-400" /> Carregando…</div>
           ) : loadError ? (
             <p className="text-[10px] text-red-400 text-center py-4 px-2">Erro: {loadError}</p>
           ) : products.length === 0 ? (
-            <p className="text-[10px] text-white/50 text-center py-4">Nenhum produto cadastrado ainda. Cadastre em Radar de Oportunidades.</p>
+            <p className="text-[10px] text-white/50 text-center py-4">Nenhum produto cadastrado ainda. Cadastre em Radar de Oportunidades ou use a aba Upload.</p>
           ) : (
             <div className="grid grid-cols-2 gap-1">
               {products.map(p => (
@@ -394,6 +420,22 @@ export function SettingsNode({ id, data, selected }: NodeProps) {
 export function GenerateNode({ id, data, selected }: NodeProps) {
   const d = data as { status: string; resultUrl?: string; onExecute?: () => void; ready?: boolean }
 
+  // E52b: cliente pediu opção de baixar o resultado direto do node
+  async function downloadResult() {
+    if (!d.resultUrl) return
+    try {
+      const r = await fetch(d.resultUrl)
+      const blob = await r.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `vyral-${Date.now()}.png`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch {
+      window.open(d.resultUrl, '_blank')
+    }
+  }
+
   return (
     <div className={`${baseNodeClass} ${selected ? 'ring-2 ring-primary-500' : ''}`}>
       <Handle type="target" position={Position.Left} className="!bg-violet-400 !w-2 !h-2" />
@@ -409,16 +451,24 @@ export function GenerateNode({ id, data, selected }: NodeProps) {
           className="w-full py-2 rounded-lg bg-neon text-surface-500 text-xs font-bold hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1.5"
         >
           {d.status === 'generating' ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-          {d.status === 'generating' ? 'Gerando...' : d.status === 'done' ? 'Gerar de novo' : 'Gerar Imagem'}
+          {d.status === 'generating' ? 'Gerando...' : d.status === 'done' ? 'Regerar' : 'Gerar Imagem'}
         </button>
         {!d.ready && d.status !== 'done' && (
-          <p className="text-[9px] text-yellow-400/80 text-center">Conecte Produto + Avatar + Cena + Ajustes</p>
+          <p className="text-[9px] text-yellow-400/80 text-center">Conecte Produto + Avatar + Cena (Ajustes opcional)</p>
         )}
         {d.status === 'done' && d.resultUrl && (
           <div className="space-y-1">
             <img src={d.resultUrl} alt="Resultado" className="w-full rounded" />
-            <div className="flex items-center gap-1 text-[10px] text-green-400">
-              <CheckCircle2 size={10} /> Gerado
+            <div className="flex items-center justify-between gap-1">
+              <div className="flex items-center gap-1 text-[10px] text-green-400">
+                <CheckCircle2 size={10} /> Gerado
+              </div>
+              <button
+                onClick={downloadResult}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-primary-600/30 text-primary-300 text-[10px] font-medium hover:bg-primary-600/50 cursor-pointer"
+              >
+                <Upload size={10} className="rotate-180" /> Baixar
+              </button>
             </div>
           </div>
         )}
@@ -426,6 +476,8 @@ export function GenerateNode({ id, data, selected }: NodeProps) {
           <p className="text-[9px] text-red-400 text-center">Erro. Tente novamente.</p>
         )}
       </div>
+      {/* E52b: Handle de saída pra poder ligar o resultado a Editar Imagem / Gerar Vídeo */}
+      <Handle type="source" position={Position.Right} className="!bg-violet-400 !w-2 !h-2" />
     </div>
   )
 }
@@ -485,8 +537,9 @@ export function PromptNode({ id, data, selected }: NodeProps) {
     if (!val.trim()) return
     setEnhancing(true)
     try {
-      const { data, error } = await supabase.functions.invoke('enhance-prompt', {
-        body: { description: val, type: 'video' },
+      // E52b: invokeRaw + max_chars (era invoke broken pattern, cliente reportou "carregando eternamente")
+      const { data, error } = await invokeRaw<{ prompt?: string; truncated?: boolean; credits_remaining?: number }>('enhance-prompt', {
+        description: val, type: 'video', max_chars: 800,
       })
       if (error || !data?.prompt) return
       applyCreditsFromResponse(data)
@@ -524,10 +577,11 @@ export function PromptNode({ id, data, selected }: NodeProps) {
   )
 }
 
-// EditImageActionNode: self-contained — foto referência (slot) + 4 templates + textarea + botão Editar
+// EditImageActionNode: self-contained — foto principal + foto referência + 4 templates + textarea + botão Editar
 export function EditImageActionNode({ id, data, selected }: NodeProps) {
-  const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean; selfImageUrl?: string; editTemplate?: string; editPrompt?: string }
+  const d = data as { status?: string; resultUrl?: string; errorMessage?: string; onExecute?: () => void; ready?: boolean; selfImageUrl?: string; selfRefImageUrl?: string; editTemplate?: string; editPrompt?: string }
   const [busy, setBusy] = useState(false)
+  const [busyRef, setBusyRef] = useState(false)
   const status = d.status || 'idle'
 
   function update(patch: Record<string, unknown>) {
@@ -543,12 +597,23 @@ export function EditImageActionNode({ id, data, selected }: NodeProps) {
     } finally { setBusy(false); e.target.value = '' }
   }
 
+  // E52b: cliente reportou que faltava upload da imagem REFERÊNCIA pra Trocar Influencer/Pose
+  async function onRefFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    setBusyRef(true)
+    try {
+      const url = await resizeImageFile(file, 1280, 0.85)
+      update({ selfRefImageUrl: url })
+    } finally { setBusyRef(false); e.target.value = '' }
+  }
+
   const templates = [
     { id: 'roupa', label: 'Trocar Roupa', icon: '👕' },
     { id: 'cenario', label: 'Trocar Cenário', icon: '🌅' },
     { id: 'influencer', label: 'Trocar Influencer', icon: '👤' },
     { id: 'pose', label: 'Trocar Pose', icon: '🤸' },
   ]
+  const needsRef = d.editTemplate === 'influencer' || d.editTemplate === 'pose'
 
   return (
     <div className={`${baseNodeClass} ${selected ? 'ring-2 ring-primary-500' : ''}`}>
@@ -559,17 +624,38 @@ export function EditImageActionNode({ id, data, selected }: NodeProps) {
         <NodeHeaderActions id={id} />
       </div>
       <div className="p-3 space-y-2">
-        <label className="block cursor-pointer">
-          {d.selfImageUrl ? (
-            <img src={d.selfImageUrl} alt="" className="w-full rounded object-cover aspect-square" />
-          ) : (
-            <div className="w-full flex flex-col items-center gap-1 py-4 rounded border border-dashed border-white/20 hover:border-fuchsia-500/50">
-              {busy ? <Loader2 size={14} className="text-fuchsia-400 animate-spin" /> : <Upload size={14} className="text-fuchsia-400" />}
-              <span className="text-[9px] text-white/50">⚠ Conecte uma imagem ou suba aqui</span>
-            </div>
-          )}
-          <input type="file" accept="image/*" className="hidden" onChange={onFile} />
-        </label>
+        <div>
+          <p className="text-[9px] text-white/40 uppercase tracking-wide mb-1">Imagem principal</p>
+          <label className="block cursor-pointer">
+            {d.selfImageUrl ? (
+              <img src={d.selfImageUrl} alt="" className="w-full rounded object-cover aspect-square" />
+            ) : (
+              <div className="w-full flex flex-col items-center gap-1 py-4 rounded border border-dashed border-white/20 hover:border-fuchsia-500/50">
+                {busy ? <Loader2 size={14} className="text-fuchsia-400 animate-spin" /> : <Upload size={14} className="text-fuchsia-400" />}
+                <span className="text-[9px] text-white/50">⚠ Conecte uma imagem ou suba aqui</span>
+              </div>
+            )}
+            <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+          </label>
+        </div>
+
+        {/* E52b: slot de referência — só aparece quando o template precisa (Trocar Influencer/Pose) */}
+        {needsRef && (
+          <div>
+            <p className="text-[9px] text-white/40 uppercase tracking-wide mb-1">Imagem referência (rosto/pose desejada)</p>
+            <label className="block cursor-pointer">
+              {d.selfRefImageUrl ? (
+                <img src={d.selfRefImageUrl} alt="" className="w-full rounded object-cover aspect-square" />
+              ) : (
+                <div className="w-full flex flex-col items-center gap-1 py-4 rounded border border-dashed border-amber-500/30 hover:border-amber-500/60">
+                  {busyRef ? <Loader2 size={14} className="text-amber-400 animate-spin" /> : <Upload size={14} className="text-amber-400" />}
+                  <span className="text-[9px] text-amber-300">Suba a foto de referência</span>
+                </div>
+              )}
+              <input type="file" accept="image/*" className="hidden" onChange={onRefFile} />
+            </label>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-1">
           {templates.map(t => (
