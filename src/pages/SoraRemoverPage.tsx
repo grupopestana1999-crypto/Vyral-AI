@@ -19,6 +19,7 @@ export function SoraRemoverPage() {
   const navigate = useNavigate()
   const { subscription } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
+  const isUnlimited = !!subscription?.unlimited_daily // E53
 
   const [tab, setTab] = useState<Tab>('criar')
   const [videoUrl, setVideoUrl] = useState('')
@@ -26,7 +27,7 @@ export function SoraRemoverPage() {
   const [resultUrl, setResultUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const insufficient = credits < CREDITS
+  const insufficient = !isUnlimited && credits < CREDITS
   const validUrl = SORA_URL_REGEX.test(videoUrl.trim())
 
   async function handleRemove() {

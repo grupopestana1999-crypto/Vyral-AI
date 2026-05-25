@@ -9,9 +9,10 @@ import { useState } from 'react'
 function fmtCurrency(n: number) { return `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` }
 
 export function CreditsPage() {
-  const { subscription, user } = useAuthStore()
+  const { subscription, user, dailyQuota } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
   const total = subscription?.credits_total ?? 0
+  const isUnlimited = !!(dailyQuota?.unlimited ?? subscription?.unlimited_daily) // E53
   const [customQty, setCustomQty] = useState(100)
   const [purchasing, setPurchasing] = useState<string | null>(null)
 
@@ -61,11 +62,49 @@ export function CreditsPage() {
           <Coins size={20} className="text-white" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-white">Comprar Créditos</h1>
-          <p className="text-sm text-white/50">Recarregue seus créditos para continuar gerando</p>
+          <h1 className="text-xl font-bold text-white">{isUnlimited ? 'Seu plano' : 'Comprar Créditos'}</h1>
+          <p className="text-sm text-white/50">{isUnlimited ? 'Geração ilimitada com cota diária renovável' : 'Recarregue seus créditos para continuar gerando'}</p>
         </div>
       </div>
 
+      {isUnlimited ? (
+        // E53: modelo cota diária — mostra "Créditos ilimitados" + contadores de uso do dia
+        <div className="bg-surface-300 border border-white/5 rounded-xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-white/40 uppercase tracking-wide">Seu acesso</p>
+              <p className="text-3xl font-bold text-neon">Créditos ilimitados</p>
+              <p className="text-xs text-white/30">Cotas diárias renovam a cada 24h</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-white/40">Plano</p>
+              <p className="text-sm font-semibold text-primary-400 capitalize">{subscription?.plan_type ?? 'Nenhum'}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Imagens', q: dailyQuota?.image },
+              { label: 'Vídeos', q: dailyQuota?.video },
+              { label: 'Imitar Movimento', q: dailyQuota?.motion },
+            ].map(item => {
+              const used = item.q?.used ?? 0
+              const limit = item.q?.limit ?? 0
+              const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0
+              const maxed = used >= limit && limit > 0
+              return (
+                <div key={item.label} className="bg-surface-400/50 rounded-lg p-3">
+                  <p className="text-[11px] text-white/50 mb-1">{item.label}</p>
+                  <p className={`text-lg font-bold ${maxed ? 'text-red-400' : 'text-white'}`}>{used}<span className="text-xs text-white/40"> / {limit} hoje</span></p>
+                  <div className="h-1.5 rounded-full bg-white/10 mt-2 overflow-hidden">
+                    <div className={`h-full ${maxed ? 'bg-red-400' : 'bg-neon'}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <p className="text-[11px] text-white/40">Clonagem de voz e transcrição (ElevenLabs) são ilimitados. Quando uma cota diária zera, é só aguardar a renovação em 24h.</p>
+        </div>
+      ) : (
       <div className="bg-surface-300 border border-white/5 rounded-xl p-6 flex items-center justify-between">
         <div>
           <p className="text-xs text-white/40 uppercase tracking-wide">Saldo atual</p>
@@ -77,7 +116,9 @@ export function CreditsPage() {
           <p className="text-sm font-semibold text-primary-400 capitalize">{subscription?.plan_type ?? 'Nenhum'}</p>
         </div>
       </div>
+      )}
 
+      {!isUnlimited && (<>
       <div>
         <h3 className="text-sm font-semibold text-white mb-3">Pacotes de créditos</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -133,6 +174,7 @@ export function CreditsPage() {
           </button>
         </div>
       </div>
+      </>)}
 
       <div>
         <h3 className="text-sm font-semibold text-white mb-3">Upgrade de plano</h3>

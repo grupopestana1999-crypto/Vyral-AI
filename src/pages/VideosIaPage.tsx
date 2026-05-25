@@ -24,6 +24,7 @@ export function VideosIaPage() {
   const navigate = useNavigate()
   const { subscription } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
+  const isUnlimited = !!subscription?.unlimited_daily // E53
 
   const [tab, setTab] = useState<Tab>('criar')
   const [prompt, setPrompt] = useState('')
@@ -49,7 +50,7 @@ export function VideosIaPage() {
   }, [enhancing])
 
   const cost = calcCredits('grok_video', { duration_s: duration })
-  const insufficient = credits < cost
+  const insufficient = !isUnlimited && credits < cost
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -73,7 +74,7 @@ export function VideosIaPage() {
       // E52: passa max_chars pro backend respeitar limite. Antes Gemini gerava livre e
       // o slice cortava feio no meio da palavra.
       const { data, error } = await invokeRaw<{ prompt?: string; truncated?: boolean; error?: string; over_limit?: boolean; uses_lifetime?: number; lifetime_limit?: number; uses_today?: number; limit?: number; credits_remaining?: number }>('enhance-prompt', {
-        description: prompt, type: 'video', max_chars: MAX_PROMPT,
+        description: prompt, type: 'video', max_chars: MAX_PROMPT, target_model: 'grok',
       })
       if (error) throw new Error(error.message)
       if (data?.error) { toast.error(data.error); return }

@@ -13,6 +13,15 @@ export interface Subscription {
   hotmart_transaction_id: string | null
   stripe_session_id: string | null
   created_at: string
+  unlimited_daily?: boolean
+}
+
+// E53: cota diária pra usuários do modelo ilimitado
+export interface DailyQuota {
+  unlimited: boolean
+  image: { used: number; limit: number }
+  video: { used: number; limit: number }
+  motion: { used: number; limit: number }
 }
 
 export interface Product {

@@ -116,7 +116,8 @@ export function BoosterDetailPage() {
   if (booster.tool === 'influencer_lab') return <Navigate to="/booster/influencer-lab" replace />
 
   const credits = subscription?.credits_remaining ?? 0
-  const hasInsufficientCredits = booster.credits > 0 && credits < booster.credits
+  const isUnlimited = !!subscription?.unlimited_daily // E53
+  const hasInsufficientCredits = !isUnlimited && booster.credits > 0 && credits < booster.credits
 
   async function handleGenerate() {
     if (!booster) return

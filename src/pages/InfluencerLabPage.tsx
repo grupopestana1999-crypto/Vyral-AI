@@ -50,6 +50,14 @@ function InfluencerLabInner() {
   const [rfInstance, setRfInstance] = useState<ReactFlowInstance | null>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
 
+  // E53: refs sempre atualizadas pra eliminar stale closure. Bug: Editar Imagem/Imitar
+  // Movimento não achavam a imagem conectada por handle porque executeAction/ancestorsOf
+  // liam nodes/edges de um closure antigo. Lendo da ref, sempre pega o estado fresco.
+  const nodesRef = useRef<Node[]>(nodes)
+  const edgesRef = useRef<Edge[]>(edges)
+  useEffect(() => { nodesRef.current = nodes }, [nodes])
+  useEffect(() => { edgesRef.current = edges }, [edges])
+
   // Escuta eventos de atualização vindos dos nodes (produto, avatar, cena, settings)
   useEffect(() => {
     function handler(e: Event) {
@@ -126,18 +134,21 @@ function InfluencerLabInner() {
     event.dataTransfer.effectAllowed = 'move'
   }
 
-  // Coleta ancestrais (BFS reverso) de um node específico
+  // Coleta ancestrais (BFS reverso) de um node específico.
+  // E53: lê de nodesRef/edgesRef (estado fresco) em vez do closure.
   function ancestorsOf(nodeId: string): Node[] {
+    const curEdges = edgesRef.current
+    const curNodes = nodesRef.current
     const visited = new Set<string>()
     const queue = [nodeId]
     while (queue.length > 0) {
       const current = queue.shift()!
       if (visited.has(current)) continue
       visited.add(current)
-      edges.filter(e => e.target === current).forEach(e => queue.push(e.source))
+      curEdges.filter(e => e.target === current).forEach(e => queue.push(e.source))
     }
     visited.delete(nodeId)
-    return Array.from(visited).map(id => nodes.find(n => n.id === id)).filter(Boolean) as Node[]
+    return Array.from(visited).map(id => curNodes.find(n => n.id === id)).filter(Boolean) as Node[]
   }
 
   // Determina readiness pra cada tipo de action
@@ -205,7 +216,10 @@ function InfluencerLabInner() {
     return { ready: false }
   }
 
-  async function executeAction(node: Node) {
+  async function executeAction(nodeId: string) {
+    // E53: resolve o node fresco da ref (não do closure) pra pegar dados/conexões atuais
+    const node = nodesRef.current.find(n => n.id === nodeId)
+    if (!node) return
     const a = ancestorsOf(node.id)
     setNodes(nds => nds.map(n => n.id === node.id ? { ...n, data: { ...n.data, status: 'generating', errorMessage: undefined } } : n))
 
@@ -351,7 +365,8 @@ function InfluencerLabInner() {
     setNodes(nds => nds.map(n => {
       if (!ACTION_NODE_TYPES.has(n.type ?? '')) return n
       const { ready, hint } = isActionReady(n)
-      return { ...n, data: { ...n.data, onExecute: () => executeAction(n), ready, readyHint: hint } }
+      // E53: passa só o id; executeAction resolve o node fresco da ref no clique (sem stale closure)
+      return { ...n, data: { ...n.data, onExecute: () => executeAction(n.id), ready, readyHint: hint } }
     }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes.length, edges.length, JSON.stringify(nodes.map(n => ({ id: n.id, data: n.data })))])

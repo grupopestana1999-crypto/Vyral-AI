@@ -28,6 +28,7 @@ export function FilmesIaPage() {
   const navigate = useNavigate()
   const { subscription } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
+  const isUnlimited = !!subscription?.unlimited_daily // E53
 
   const [tab, setTab] = useState<Tab>('criar')
   const [prompt, setPrompt] = useState('')
@@ -56,7 +57,7 @@ export function FilmesIaPage() {
   }, [enhancing])
 
   const cost = calcCredits('kling_3', { duration_s: duration, audio })
-  const insufficient = credits < cost
+  const insufficient = !isUnlimited && credits < cost
 
   function handleFile(setter: (s: string) => void) {
     return async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,7 +82,7 @@ export function FilmesIaPage() {
       // sessões longas. Mesma migração do EditImagePage/PeleUltraPage pós-E31/E43.
       // E52: max_chars no body pra Gemini respeitar limite (era cortado feio com .slice)
       const { data, error } = await invokeRaw<{ prompt?: string; truncated?: boolean; error?: string; credits_remaining?: number }>('enhance-prompt', {
-        description: prompt, type: 'video', max_chars: MAX_PROMPT,
+        description: prompt, type: 'video', max_chars: MAX_PROMPT, target_model: 'kling',
       })
       if (error) throw new Error(error.message)
       if (data?.error) { toast.error(data.error); return }

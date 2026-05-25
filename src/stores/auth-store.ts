@@ -3,13 +3,14 @@ import type { User, Session } from '@supabase/supabase-js'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { setDiagnosticEmail } from '../lib/clientDiagnostic'
-import type { UserRole, Subscription } from '../types/database'
+import type { UserRole, Subscription, DailyQuota } from '../types/database'
 
 interface AuthState {
   user: User | null
   session: Session | null
   role: UserRole
   subscription: Subscription | null
+  dailyQuota: DailyQuota | null
   isLoading: boolean
   initialize: () => Promise<void>
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
@@ -17,6 +18,15 @@ interface AuthState {
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: string | null }>
   setCreditsRemaining: (n: number) => void
+  refreshDailyQuota: () => Promise<void>
+}
+
+// E53: carrega o status da cota diária via RPC daily_quota_status
+async function fetchDailyQuota(email: string): Promise<DailyQuota | null> {
+  try {
+    const { data } = await supabase.rpc('daily_quota_status', { _email: email })
+    return (data as DailyQuota) ?? null
+  } catch { return null }
 }
 
 let subscriptionChannel: RealtimeChannel | null = null
@@ -27,6 +37,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   role: 'user',
   subscription: null,
+  dailyQuota: null,
   isLoading: true,
 
   initialize: async () => {
@@ -35,7 +46,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (session?.user) {
       const role = await fetchUserRole(session.user.id)
       const subscription = await fetchSubscription(session.user.email!)
-      set({ user: session.user, session, role, subscription, isLoading: false })
+      const dailyQuota = await fetchDailyQuota(session.user.email!)
+      set({ user: session.user, session, role, subscription, dailyQuota, isLoading: false })
       setDiagnosticEmail(session.user.email ?? null)
       subscribeToSubscriptionChanges(session.user.email!, set)
     } else {
@@ -46,13 +58,14 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (session?.user) {
         const role = await fetchUserRole(session.user.id)
         const subscription = await fetchSubscription(session.user.email!)
-        set({ user: session.user, session, role, subscription })
+        const dailyQuota = await fetchDailyQuota(session.user.email!)
+        set({ user: session.user, session, role, subscription, dailyQuota })
         setDiagnosticEmail(session.user.email ?? null)
         subscribeToSubscriptionChanges(session.user.email!, set)
       } else {
         unsubscribeFromSubscriptionChanges()
         setDiagnosticEmail(null)
-        set({ user: null, session: null, role: 'user', subscription: null })
+        set({ user: null, session: null, role: 'user', subscription: null, dailyQuota: null })
       }
     })
   },
@@ -85,6 +98,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   setCreditsRemaining: (n: number) => set(state => ({
     subscription: state.subscription ? { ...state.subscription, credits_remaining: n } : null
   })),
+
+  // E53: re-busca a cota diária (chamar após cada geração pra atualizar contadores)
+  refreshDailyQuota: async () => {
+    const email = useAuthStore.getState().user?.email
+    if (!email) return
+    const dailyQuota = await fetchDailyQuota(email)
+    set({ dailyQuota })
+  },
 }))
 
 async function fetchUserRole(userId: string): Promise<UserRole> {

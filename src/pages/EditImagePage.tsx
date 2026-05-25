@@ -35,6 +35,7 @@ export function EditImagePage() {
   const booster = BOOSTER_BY_SLUG['edit-image']
   const { subscription } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
+  const isUnlimited = !!subscription?.unlimited_daily // E53
 
   const [mainImage, setMainImage] = useState<string>('')
   const [refImages, setRefImages] = useState<string[]>([])
@@ -58,7 +59,7 @@ export function EditImagePage() {
     })
   }, [])
 
-  const insufficient = credits < CREDITS
+  const insufficient = !isUnlimited && credits < CREDITS
 
   async function handleMainFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

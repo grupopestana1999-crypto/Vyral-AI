@@ -38,6 +38,7 @@ export function ClonagemVozPage() {
   const navigate = useNavigate()
   const { subscription, user } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
+  const isUnlimited = !!subscription?.unlimited_daily // E53 (ElevenLabs ilimitado)
 
   const [tab, setTab] = useState<Tab>('criar')
   const [voices, setVoices] = useState<Voice[]>([])
@@ -54,7 +55,7 @@ export function ClonagemVozPage() {
   const [resultAudio, setResultAudio] = useState<string | null>(null)
 
   const cost = calcCredits('voice_clone', { chars: text.length })
-  const insufficient = credits < cost
+  const insufficient = !isUnlimited && credits < cost
   const atVoiceLimit = voices.length >= MAX_VOICES
 
   useEffect(() => {

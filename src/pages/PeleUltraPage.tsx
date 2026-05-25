@@ -17,6 +17,7 @@ export function PeleUltraPage() {
   const navigate = useNavigate()
   const { subscription } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
+  const isUnlimited = !!subscription?.unlimited_daily // E53: modelo cota não bloqueia por crédito
 
   const [tab, setTab] = useState<Tab>('criar')
   const [imageUrl, setImageUrl] = useState<string>('')
@@ -25,7 +26,7 @@ export function PeleUltraPage() {
   const [error, setError] = useState<string | null>(null)
   const [historyRefresh, setHistoryRefresh] = useState(0)
 
-  const insufficient = credits < CREDITS
+  const insufficient = !isUnlimited && credits < CREDITS
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

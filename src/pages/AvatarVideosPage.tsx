@@ -20,6 +20,7 @@ export function AvatarVideosPage() {
   const navigate = useNavigate()
   const { subscription, user } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
+  const isUnlimited = !!subscription?.unlimited_daily // E53
 
   const [tab, setTab] = useState<Tab>('criar')
   const [avatarTab, setAvatarTab] = useState<AvatarTab>('galeria')
@@ -32,7 +33,7 @@ export function AvatarVideosPage() {
 
   // E48d: cliente escolhe entre Lite-720p (15cr, mais barato) e Lite-1080p (20cr, mais qualidade).
   const cost = calcCredits('veo_video', { resolution })
-  const insufficient = credits < cost
+  const insufficient = !isUnlimited && credits < cost
 
   // Re-roda quando user.email vira disponível: auth-store inicializa async,
   // então no primeiro mount o JWT ainda não foi setado no client Supabase →

@@ -15,6 +15,7 @@ export function TranscricaoPage() {
   const navigate = useNavigate()
   const { subscription } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
+  const isUnlimited = !!subscription?.unlimited_daily // E53 (ElevenLabs ilimitado)
 
   const [mode, setMode] = useState<Mode>('upload')
   const [audioFile, setAudioFile] = useState<File | null>(null)
@@ -27,7 +28,7 @@ export function TranscricaoPage() {
   const [copied, setCopied] = useState(false)
 
   const cost = calcCredits('transcribe_audio', { duration_s: duration > 0 ? duration : 60 })
-  const insufficient = credits < cost
+  const insufficient = !isUnlimited && credits < cost
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

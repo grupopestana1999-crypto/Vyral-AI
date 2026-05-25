@@ -68,6 +68,7 @@ export function ImitarMovimentoPage() {
   const navigate = useNavigate()
   const { subscription, user } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
+  const isUnlimited = !!subscription?.unlimited_daily // E53
 
   const [tab, setTab] = useState<Tab>('criar')
   // Task ativa: polling client-side pra mostrar resultado direto na aba Criar quando
@@ -121,7 +122,7 @@ export function ImitarMovimentoPage() {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('todos')
 
   const cost = calcCredits('motion_control', { duration_s: duration, quality })
-  const insufficient = credits < cost
+  const insufficient = !isUnlimited && credits < cost
 
   // E35: snapshot de estado quando user abre a página, pra debug bug "segue dando erro"
   useEffect(() => {

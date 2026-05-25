@@ -231,6 +231,7 @@ export function StudioPage() {
   }, [session.status, user?.id, session.pendingSince, session.generatedAt])
 
   const credits = subscription?.credits_remaining ?? 0
+  const isUnlimited = !!subscription?.unlimited_daily // E53
   const cost = TOOL_CREDITS.studio_image
 
   // E29: snapshot do estado quando user abre a página
@@ -325,7 +326,7 @@ export function StudioPage() {
       sessionStatus: session.status,
       generating,
     })
-    if (credits < cost) {
+    if (!isUnlimited && credits < cost) {
       generatingRef.current = false
       logEvent('early_return', 'studio', { reason: 'no-credits' })
       toast.error('Créditos insuficientes'); return
@@ -730,7 +731,7 @@ export function StudioPage() {
                 {!hasProduct && '· Selecione um produto'}
                 {!hasInfluencer && ' · Selecione um influencer'}
                 {!hasScene && ' · Escolha uma cena'}
-                {credits < cost && ' · Créditos insuficientes'}
+                {!isUnlimited && credits < cost && ' · Créditos insuficientes'}
               </p>
             )}
 

@@ -78,6 +78,7 @@ export function AvatarCreatorPage() {
   const navigate = useNavigate()
   const { subscription } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
+  const isUnlimited = !!subscription?.unlimited_daily // E53
 
   const [imageUrl, setImageUrl] = useState<string>('')
   // E33: multi-select. Cliente pode combinar pele + corpo + cabelo (1 variante por
@@ -92,7 +93,7 @@ export function AvatarCreatorPage() {
   // E30: ref síncrono pra impedir 2º click ANTES do React propagar disabled
   const generatingRef = useRef(false)
 
-  const insufficient = credits < CREDITS
+  const insufficient = !isUnlimited && credits < CREDITS
   const hasAnySelection = Object.values(selections).some(Boolean)
 
   function toggleVariant(cat: CategoryId, variantId: string) {

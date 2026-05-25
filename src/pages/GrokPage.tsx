@@ -17,6 +17,7 @@ export function GrokPage() {
   const navigate = useNavigate()
   const { subscription } = useAuthStore()
   const credits = subscription?.credits_remaining ?? 0
+  const isUnlimited = !!subscription?.unlimited_daily // E53
 
   const [tab, setTab] = useState<Tab>('criar')
   const [prompt, setPrompt] = useState('')
@@ -36,7 +37,7 @@ export function GrokPage() {
     return () => { if (enhanceTimerRef.current) clearInterval(enhanceTimerRef.current) }
   }, [enhancing])
 
-  const insufficient = credits < CREDITS
+  const insufficient = !isUnlimited && credits < CREDITS
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
