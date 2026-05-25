@@ -428,8 +428,22 @@ function InfluencerLabInner() {
     return () => { supabase.removeChannel(channel); clearInterval(poll) }
   }, [user?.email, nodes, setNodes])
 
-  // Persistência leve em localStorage
+  // Carrega workflow salvo (ou preload do Super Vyral, que tem precedência)
   useEffect(() => {
+    // E54: Super Vyral grava um workflow pronto em sessionStorage. Se existir, carrega
+    // ele (substituindo o canvas) e remove a chave. Senão, carrega o último salvo.
+    try {
+      const preload = sessionStorage.getItem('vyral_lab_preload')
+      if (preload) {
+        sessionStorage.removeItem('vyral_lab_preload')
+        const { nodes: n, edges: e } = JSON.parse(preload)
+        if (Array.isArray(n) && n.length > 0) {
+          setNodes(n); setEdges(e || [])
+          toast.success('Workflow carregado! Suba sua imagem e gere cada etapa.')
+          return
+        }
+      }
+    } catch { /* ignore */ }
     const saved = localStorage.getItem('vyral_lab_workflow')
     if (saved) {
       try {
