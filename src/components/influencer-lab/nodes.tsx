@@ -826,6 +826,8 @@ export function GenerateVideoActionNode({ id, data, selected }: NodeProps) {
         {status === 'done' && !d.resultUrl && <p className="text-[9px] text-amber-400 text-center">Em processamento — recarregue daqui a pouco</p>}
         {status === 'error' && <p className="text-[9px] text-red-400 text-center">{d.errorMessage || 'Erro'}</p>}
       </div>
+      {/* E53b: handle de saída pra encadear o vídeo gerado em outro node */}
+      <Handle type="source" position={Position.Right} className="!bg-blue-400 !w-2 !h-2" />
     </div>
   )
 }
