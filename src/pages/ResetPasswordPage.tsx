@@ -114,16 +114,16 @@ export function ResetPasswordPage() {
     if (password.length < 6) { toast.error('Senha precisa ter pelo menos 6 caracteres'); return }
     if (password !== confirm) { toast.error('As senhas não conferem'); return }
     setState('saving')
-    // Race contra timeout: depois de updateUser numa session de PASSWORD_RECOVERY o Supabase
-    // às vezes invalida o token e a resposta nunca chega ao client. Backend já processou.
-    // Se 4s passarem sem resposta nem erro, assumimos sucesso e redirecionamos.
+    // IMPORTANTE: NÃO assumir sucesso por timeout. A versão antiga assumia que a senha
+    // tinha trocado se updateUser demorasse 4s — isso mascarava falhas: o usuário via
+    // "Senha atualizada" mas a senha NUNCA salvava, e depois não conseguia logar.
+    // Agora só confirmamos sucesso quando o servidor responde de fato.
     const updatePromise = supabase.auth.updateUser({ password }).then(r => ({ kind: 'response' as const, ...r }))
-    const timeoutPromise = new Promise<{ kind: 'timeout' }>(resolve => setTimeout(() => resolve({ kind: 'timeout' }), 4000))
+    const timeoutPromise = new Promise<{ kind: 'timeout' }>(resolve => setTimeout(() => resolve({ kind: 'timeout' }), 15000))
     const result = await Promise.race([updatePromise, timeoutPromise])
     if (result.kind === 'timeout') {
-      setState('done')
-      toast.success('Senha atualizada. Redirecionando…')
-      setTimeout(() => navigate('/dashboard'), 1500)
+      setState('ready')
+      toast.error('Não consegui confirmar a troca de senha (conexão lenta). Tente de novo.')
       return
     }
     if (result.error) {
@@ -131,6 +131,7 @@ export function ResetPasswordPage() {
       setState('ready')
       return
     }
+    // Sucesso confirmado pelo servidor — a senha foi realmente salva.
     setState('done')
     toast.success('Senha atualizada com sucesso!')
     setTimeout(() => navigate('/dashboard'), 1500)
