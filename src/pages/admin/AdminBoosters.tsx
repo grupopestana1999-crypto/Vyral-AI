@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Zap, ToggleLeft, ToggleRight, Save, Loader2 } from 'lucide-react'
+import { Zap, ToggleLeft, ToggleRight, Save, Loader2, Coins, Infinity as InfinityIcon } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 import { BOOSTERS } from '../../types/boosters'
@@ -18,6 +18,8 @@ export function AdminBoosters() {
   const [loading, setLoading] = useState(true)
   const [edits, setEdits] = useState<Record<string, number>>({})
   const [saving, setSaving] = useState<string | null>(null)
+  const [salesMode, setSalesMode] = useState<'unlimited' | 'credits' | null>(null)
+  const [savingMode, setSavingMode] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -26,7 +28,21 @@ export function AdminBoosters() {
     const { data, error } = await supabase.from('booster_settings').select('*').order('tool_name').order('tier')
     if (error) toast.error('Erro: ' + error.message)
     setRows((data ?? []) as BoosterSetting[])
+    const { data: sm } = await supabase.from('app_settings').select('value').eq('key', 'sales_mode').maybeSingle()
+    setSalesMode((sm?.value as string) === 'credits' ? 'credits' : 'unlimited')
     setLoading(false)
+  }
+
+  // E61: modo de venda global (vale só pra compras NOVAS; clientes atuais não mudam).
+  async function setMode(mode: 'unlimited' | 'credits') {
+    if (mode === salesMode || savingMode) return
+    const label = mode === 'unlimited' ? 'ILIMITADO' : 'CRÉDITOS'
+    if (!confirm(`Passar a vender no modo ${label}? Vale só pra COMPRAS NOVAS daqui pra frente — quem já é cliente não muda.`)) return
+    setSavingMode(true)
+    const { error } = await supabase.from('app_settings').upsert({ key: 'sales_mode', value: mode }, { onConflict: 'key' })
+    setSavingMode(false)
+    if (error) toast.error('Erro: ' + error.message)
+    else { setSalesMode(mode); toast.success(`Modo de venda: ${label}`) }
   }
 
   function rowKey(tool: string, tier: string) { return `${tool}::${tier}` }
@@ -69,6 +85,29 @@ export function AdminBoosters() {
 
   return (
     <div className="space-y-3">
+      {/* E61: modo de venda global */}
+      <div className="bg-surface-300 border border-primary-500/20 rounded-xl p-4">
+        <p className="text-sm font-semibold text-white mb-0.5">Modo de venda (compras novas)</p>
+        <p className="text-[11px] text-white/40 mb-3">Define o que cada compra NOVA recebe. Quem já é cliente não muda.</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => setMode('unlimited')} disabled={savingMode || salesMode === null}
+            className={`flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition-all cursor-pointer disabled:opacity-50 ${salesMode === 'unlimited' ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/50 hover:text-white'}`}>
+            <InfinityIcon size={16} /> Ilimitado{salesMode === 'unlimited' ? ' ✓' : ''}
+          </button>
+          <button onClick={() => setMode('credits')} disabled={savingMode || salesMode === null}
+            className={`flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold transition-all cursor-pointer disabled:opacity-50 ${salesMode === 'credits' ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/50 hover:text-white'}`}>
+            <Coins size={16} /> Créditos{salesMode === 'credits' ? ' ✓' : ''}
+          </button>
+        </div>
+        <p className="text-[11px] text-white/40 mt-2">
+          {salesMode === 'unlimited'
+            ? 'Vendendo ILIMITADO: cliente recebe cota diária (50 imagens / 15 vídeos / 10 motion), sem número de crédito.'
+            : salesMode === 'credits'
+              ? 'Vendendo CRÉDITOS: cliente recebe os créditos do plano e consome por uso.'
+              : 'Carregando…'}
+        </p>
+      </div>
+
       <div className="bg-surface-300/50 border border-white/5 rounded-lg p-3 text-xs text-white/50">
         Edite créditos cobrados por booster e ative/desative. Mudanças refletem <strong>imediatamente</strong> pra todos os users (gravadas no banco).
         Boosters de vídeo (Filmes IA, Imitar Movimento, Avatar Vídeos) têm 2 modelos de cobrança configuráveis separadamente.
