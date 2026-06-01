@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 
 interface FetchResult<T> {
   data: T[]
@@ -25,6 +25,8 @@ export function useFetchList<T>(
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retryTick, setRetryTick] = useState(0)
+  const stateRef = useRef({ data, loading, error })
+  stateRef.current = { data, loading, error }
 
   const retry = useCallback(() => setRetryTick(t => t + 1), [])
 
@@ -72,6 +74,24 @@ export function useFetchList<T>(
     return () => { cancelled = true; controller.abort() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, retryTick])
+
+  // Defensivo: se a lista estiver VAZIA sem loading/erro (caso o primeiro fetch tenha
+  // pego um momento ruim de sessão/rede) E o usuário voltar a focar a página, refaz.
+  // Só refaz se NÃO tem dado mostrando — evita flicker em quem já vê a lista cheia.
+  useEffect(() => {
+    function maybeRefetch() {
+      if (document.visibilityState !== 'visible') return
+      const s = stateRef.current
+      if (s.loading || s.error || s.data.length > 0) return
+      setRetryTick(t => t + 1)
+    }
+    window.addEventListener('focus', maybeRefetch)
+    document.addEventListener('visibilitychange', maybeRefetch)
+    return () => {
+      window.removeEventListener('focus', maybeRefetch)
+      document.removeEventListener('visibilitychange', maybeRefetch)
+    }
+  }, [])
 
   return { data, loading, error, retry }
 }
