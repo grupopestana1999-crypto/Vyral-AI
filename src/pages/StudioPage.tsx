@@ -457,7 +457,7 @@ export function StudioPage() {
   const hasProduct = !!(selectedProduct || uploadedProduct)
   const hasInfluencer = !!(selectedAvatar || uploadedAvatar)
   const hasScene = !!(selectedScenario || uploadedScene || customScene.trim())
-  const canGenerate = hasProduct && hasInfluencer && hasScene && credits >= cost && !generating
+  const canGenerate = hasProduct && hasInfluencer && hasScene && (isUnlimited || credits >= cost) && !generating
 
   const femaleAvatars = avatars.filter(a => a.gender === 'female')
   const maleAvatars = avatars.filter(a => a.gender === 'male')
