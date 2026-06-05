@@ -1,4 +1,4 @@
-import { Coins, Zap, Check, CreditCard } from 'lucide-react'
+import { Coins, Zap, Check, CreditCard, Image as ImageIcon, Film, Activity, Mic, FileText } from 'lucide-react'
 import { useAuthStore } from '../stores/auth-store'
 import { CREDIT_PACKAGES, CUSTOM_PACKAGE_RATE, PLANS } from '../types/credits'
 import { toast } from 'sonner'
@@ -7,6 +7,13 @@ import { buildHotmartCheckoutUrl, type HotmartPlan } from '../lib/hotmart'
 import { useState } from 'react'
 
 function fmtCurrency(n: number) { return `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` }
+
+// E64: cota diária por plano — mesmos números do backend (`app_settings.plan_quotas`).
+const PLAN_QUOTAS: Record<string, { image: number; video: number; motion: number }> = {
+  starter: { image: 50,  video: 15, motion: 10 },
+  creator: { image: 100, video: 20, motion: 15 },
+  pro:     { image: 150, video: 25, motion: 20 },
+}
 
 export function CreditsPage() {
   const { subscription, user, dailyQuota } = useAuthStore()
@@ -177,17 +184,26 @@ export function CreditsPage() {
       </>)}
 
       <div>
-        <h3 className="text-sm font-semibold text-white mb-3">Upgrade de plano</h3>
+        <h3 className="text-sm font-semibold text-white mb-3">Planos disponíveis</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {Object.entries(PLANS).map(([key, plan]) => {
             const isCurrent = subscription?.plan_type === key
+            const q = PLAN_QUOTAS[key] ?? PLAN_QUOTAS.starter
             return (
-              <div key={key} className={`bg-surface-300 border rounded-xl p-5 text-center ${isCurrent ? 'border-primary-500' : 'border-white/5'}`}>
-                <h4 className="text-sm font-semibold text-white mb-1">{plan.name}</h4>
-                <p className="text-2xl font-bold text-white">{fmtCurrency(plan.price)}</p>
-                <p className="text-xs text-white/40 mb-3">{plan.credits} créditos</p>
+              <div key={key} className={`bg-surface-300 border rounded-xl p-5 flex flex-col ${isCurrent ? 'border-primary-500 ring-1 ring-primary-500/30' : 'border-white/5'}`}>
+                <div className="text-center mb-4">
+                  <h4 className="text-sm font-semibold text-white">{plan.name}</h4>
+                  <p className="text-2xl font-bold text-white mt-1">{fmtCurrency(plan.price)}</p>
+                </div>
+                <ul className="space-y-2 text-xs text-white/70 mb-4 flex-1">
+                  <li className="flex items-center gap-2"><ImageIcon size={13} className="text-primary-400 shrink-0" /> <strong className="text-white">{q.image}</strong> imagens/dia</li>
+                  <li className="flex items-center gap-2"><Film size={13} className="text-primary-400 shrink-0" /> <strong className="text-white">{q.video}</strong> vídeos/dia</li>
+                  <li className="flex items-center gap-2"><Activity size={13} className="text-primary-400 shrink-0" /> <strong className="text-white">{q.motion}</strong> imitar movimento/dia</li>
+                  <li className="flex items-center gap-2 pt-1.5 border-t border-white/5 mt-2"><Mic size={11} className="text-white/40 shrink-0" /> Voz <span className="text-white/40">— ilimitado</span></li>
+                  <li className="flex items-center gap-2"><FileText size={11} className="text-white/40 shrink-0" /> Transcrição <span className="text-white/40">— ilimitada</span></li>
+                </ul>
                 {isCurrent ? (
-                  <div className="flex items-center justify-center gap-1 text-primary-400 text-sm"><Check size={14} /> Plano atual</div>
+                  <div className="flex items-center justify-center gap-1 py-2 text-primary-400 text-sm font-medium"><Check size={14} /> Seu plano</div>
                 ) : (
                   <button
                     onClick={() => handleUpgradePlan(key)}

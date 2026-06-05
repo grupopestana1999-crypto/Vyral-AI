@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Coins, ChevronRight, Ban, ShieldCheck, Mail, History, Crown, X, Loader2, UserPlus, Radar, Send } from 'lucide-react'
+import { Search, Coins, ChevronRight, Ban, ShieldCheck, Mail, History, Crown, X, Loader2, UserPlus, Radar, Send, Infinity as InfinityIcon } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 
@@ -42,6 +42,8 @@ export function AdminUsers() {
   const [createOpen, setCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState({ email: '', plan_type: 'starter' as 'starter' | 'creator' | 'pro', credits: 0, send_welcome: true })
   const [creating, setCreating] = useState(false)
+  // E64: modo (Ilimitado/Créditos) do usuário aberto no drawer. Carregado on demand.
+  const [currentMode, setCurrentMode] = useState<'unlimited' | 'credits' | null>(null)
 
   // load() pode rodar em modo "loud" (mostra skeleton — uso manual ou primeiro carregamento)
   // ou "silent" (atualiza dados sem skeleton — uso pelo realtime ou polling em background).
@@ -156,17 +158,44 @@ export function AdminUsers() {
     else toast.success(`Email de acesso reenviado pra ${u.email}`)
   }
 
-  function openDrawer(u: UserRow) {
+  async function openDrawer(u: UserRow) {
     setOpenId(u.id)
     setNewPlan(u.plan_type ?? '')
     setNewEmail('')
     setHistory(null)
     setCreditAmount(0)
+    setCurrentMode(null)
+    // Lê o modo atual (unlimited_daily) direto da subscription mais recente do usuário.
+    const { data } = await supabase.from('subscriptions')
+      .select('unlimited_daily')
+      .eq('customer_email', u.email).in('status', ['active', 'approved'])
+      .order('created_at', { ascending: false }).limit(1).maybeSingle()
+    setCurrentMode(data?.unlimited_daily ? 'unlimited' : 'credits')
   }
 
   function closeDrawer() {
     setOpenId(null)
     setHistory(null)
+    setCurrentMode(null)
+  }
+
+  // E64: troca o modo de um usuário específico (acima do toggle global de venda).
+  async function setMode(u: UserRow, mode: 'unlimited' | 'credits') {
+    if (mode === currentMode || busy) return
+    const label = mode === 'unlimited' ? 'ILIMITADO' : 'CRÉDITOS'
+    const detail = mode === 'unlimited'
+      ? 'Zera o saldo de créditos (não consome no modo ilimitado).'
+      : 'Dá os créditos cheios do plano atual dele (Starter 600 / Creator 900 / Pro 1500).'
+    if (!confirm(`Mudar ${u.email} para modo ${label}?\n\n${detail}`)) return
+    setBusy(true)
+    const { data, error } = await supabase.rpc('admin_set_user_mode', { _email: u.email, _mode: mode })
+    setBusy(false)
+    if (error) { toast.error('Erro: ' + error.message); return }
+    const resp = data as { success?: boolean; error?: string; credits?: number }
+    if (!resp?.success) { toast.error('Erro: ' + (resp?.error ?? 'desconhecido')); return }
+    toast.success(mode === 'unlimited' ? 'Usuário agora é ILIMITADO' : `Usuário agora é CRÉDITOS (saldo: ${resp.credits} cr)`)
+    setCurrentMode(mode)
+    load(true)
   }
 
   async function createUser() {
@@ -290,6 +319,21 @@ export function AdminUsers() {
 
               {openId === u.id && (
                 <div className="mt-4 pt-4 border-t border-white/5 space-y-3">
+                  {/* E64: Modo do usuário (Ilimitado x Créditos) */}
+                  <div>
+                    <p className="text-[10px] text-white/40 uppercase mb-1.5">Modo</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => setMode(u, 'unlimited')} disabled={busy || currentMode === null}
+                        className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 ${currentMode === 'unlimited' ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/50 hover:text-white'}`}>
+                        <InfinityIcon size={13} /> Ilimitado{currentMode === 'unlimited' ? ' ✓' : ''}
+                      </button>
+                      <button onClick={() => setMode(u, 'credits')} disabled={busy || currentMode === null}
+                        className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 ${currentMode === 'credits' ? 'bg-primary-600 text-white' : 'bg-surface-400 text-white/50 hover:text-white'}`}>
+                        <Coins size={13} /> Créditos{currentMode === 'credits' ? ' ✓' : ''}
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Ajustar créditos */}
                   <div className="flex items-center gap-2">
                     <Coins size={14} className="text-white/40 shrink-0" />
