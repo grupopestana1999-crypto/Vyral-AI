@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { resizeImageFile } from '../lib/imageUtils'
 import { HistoryTab } from '../components/boosters/HistoryTab'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
+import { handleGenerationError } from '../lib/handleGenerationError'
 
 const CREDITS = 5
 const MAX_PROMPT = 800
@@ -62,7 +63,7 @@ export function GrokPage() {
         body: { description: prompt, type: 'video', max_chars: MAX_PROMPT },
       })
       if (error) throw new Error(error.message)
-      if (data?.error) { toast.error(data.error); return }
+      if (data?.error) { handleGenerationError(data); return }
       if (typeof data?.prompt === 'string') {
         applyCreditsFromResponse(data)
         setPrompt(data.prompt.slice(0, MAX_PROMPT))
@@ -99,7 +100,7 @@ export function GrokPage() {
       }
       const { data, error: invokeError } = result
       if (invokeError) throw invokeError
-      if (data?.error) { toast.error(data.error); return }
+      if (data?.error) { handleGenerationError(data); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
         toast.success('Vídeo entrou na fila — acompanhe na aba Histórico')

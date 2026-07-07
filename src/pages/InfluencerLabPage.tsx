@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { tryCapModal } from '../lib/handleGenerationError'
 import {
   ReactFlow,
   Background,
@@ -328,7 +329,7 @@ function InfluencerLabInner() {
       if (result.kind === 'timeout') throw new Error('Tempo excedido. A geração pode estar em andamento — tente de novo daqui a pouco.')
       const { data, error: invokeError } = result
       if (invokeError) throw invokeError
-      if (data?.error) throw new Error(data.error)
+      if (data?.error) { if (tryCapModal(data)) return; throw new Error(data.error) }
 
       // Script node retorna texto puro (data.prompt). Outros retornam image_url ou task_id.
       if (node.type === 'script' && typeof data?.prompt === 'string') {

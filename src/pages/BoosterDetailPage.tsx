@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth-store'
 import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
+import { tryCapModal } from '../lib/handleGenerationError'
 
 function BoosterVideo({ url }: { url: string }) {
   const ref = useRef<HTMLVideoElement>(null)
@@ -147,6 +148,7 @@ export function BoosterDetailPage() {
       if (fnError) throw new Error(fnError.message)
 
       if (data?.error) {
+        if (tryCapModal(data)) { return }
         setError(data.error + (data.details ? ` (${data.details})` : ''))
         return
       }

@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { HistoryTab } from '../components/boosters/HistoryTab'
 import { TOOL_CREDITS } from '../types/credits'
+import { tryCapModal } from '../lib/handleGenerationError'
 
 const CREDITS = TOOL_CREDITS.sora_remover
 
@@ -47,7 +48,7 @@ export function SoraRemoverPage() {
       if (result.kind === 'timeout') { setError('Tempo excedido. Tente de novo daqui a pouco.'); return }
       const { data, error: invokeError } = result
       if (invokeError) throw invokeError
-      if (data?.error) { setError(data.error); return }
+      if (data?.error) { if (tryCapModal(data)) return; setError(data.error); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
         toast.success('Processando — acompanhe na aba Histórico')

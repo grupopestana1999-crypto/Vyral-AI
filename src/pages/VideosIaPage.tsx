@@ -10,6 +10,7 @@ import { calcCredits } from '../types/credits'
 import { useBoosterSettings } from '../stores/booster-settings-store'
 import { CreditPreview } from '../components/boosters/CreditPreview'
 import { invokeRaw } from '../lib/invokeRaw'
+import { handleGenerationError } from '../lib/handleGenerationError'
 
 const MAX_PROMPT = 800
 // E44: backend generate-grok-video v26 exige duration 6-30s (Kie grok-imagine).
@@ -77,7 +78,7 @@ export function VideosIaPage() {
         description: prompt, type: 'video', max_chars: MAX_PROMPT, target_model: 'grok',
       })
       if (error) throw new Error(error.message)
-      if (data?.error) { toast.error(data.error); return }
+      if (data?.error) { handleGenerationError(data); return }
       if (typeof data?.prompt === 'string') {
         applyCreditsFromResponse(data)
         setPrompt(data.prompt.slice(0, MAX_PROMPT))
@@ -116,7 +117,7 @@ export function VideosIaPage() {
       }
       const { data, error: invokeError } = result
       if (invokeError) throw invokeError
-      if (data?.error) { toast.error(data.error); setTab('criar'); return }
+      if (data?.error) { handleGenerationError(data); setTab('criar'); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
         toast.success('Vídeo em processamento — leva de 2 a 5 minutos. Assim que ficar pronto aparece na aba Histórico!')

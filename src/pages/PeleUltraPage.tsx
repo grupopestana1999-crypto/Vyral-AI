@@ -8,6 +8,7 @@ import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { TOOL_CREDITS } from '../types/credits'
 import { invokeRaw } from '../lib/invokeRaw'
 import { HistoryTab } from '../components/boosters/HistoryTab'
+import { tryCapModal } from '../lib/handleGenerationError'
 
 const CREDITS = TOOL_CREDITS.skin_enhancer
 
@@ -59,7 +60,7 @@ export function PeleUltraPage() {
       }
       const { data, error: invokeError } = result
       if (invokeError) throw invokeError
-      if (data?.error) { setError(data.error); return }
+      if (data?.error) { if (tryCapModal(data)) return; setError(data.error); return }
       if (typeof data?.image_url === 'string' && /^https?:\/\//.test(data.image_url)) {
         applyCreditsFromResponse(data)
         setResultUrl(data.image_url)

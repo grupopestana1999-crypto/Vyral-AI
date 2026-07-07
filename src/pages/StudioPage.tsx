@@ -12,6 +12,7 @@ import { resizeImageFile } from '../lib/imageUtils'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { logEvent } from '../lib/clientDiagnostic'
 import { invokeRaw } from '../lib/invokeRaw'
+import { tryCapModal } from '../lib/handleGenerationError'
 
 const STUDIO_SESSION_KEY = 'vyral_studio_session'
 const STUDIO_SELECTIONS_KEY = 'vyral_studio_selections'
@@ -392,6 +393,10 @@ export function StudioPage() {
       if (error) throw error
       if (data?.error) {
         const msg = data.error
+        if (tryCapModal(data)) {
+          setSession(s => ({ ...s, status: 'error', errorMessage: msg }))
+          return
+        }
         setSession(s => ({ ...s, status: 'error', errorMessage: msg }))
         toast.error(msg)
         return

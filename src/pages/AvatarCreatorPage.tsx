@@ -9,6 +9,7 @@ import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { TOOL_CREDITS } from '../types/credits'
 import { logEvent } from '../lib/clientDiagnostic'
 import { invokeRaw } from '../lib/invokeRaw'
+import { tryCapModal } from '../lib/handleGenerationError'
 
 const CREDITS = TOOL_CREDITS.avatar_creator
 
@@ -139,7 +140,7 @@ export function AvatarCreatorPage() {
           setPendingTask(null)
           toast.success('Avatar gerado!')
         } else if (data?.status === 'failed') {
-          setError(data.error || 'Geração falhou na Kie')
+          if (tryCapModal(data)) return; setError(data.error || 'Geração falhou na Kie')
           setPendingTask(null)
         }
       } catch { /* silent */ }
@@ -223,7 +224,7 @@ export function AvatarCreatorPage() {
         hasErrorField: !!data?.error,
       })
       if (invokeError) throw invokeError
-      if (data?.error) { setError(data.error); return }
+      if (data?.error) { if (tryCapModal(data)) return; setError(data.error); return }
       if (typeof data?.image_url === 'string' && /^https?:\/\//.test(data.image_url)) {
         applyCreditsFromResponse(data)
         setResultUrl(data.image_url)

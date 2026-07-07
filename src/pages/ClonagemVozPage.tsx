@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { calcCredits } from '../types/credits'
+import { handleGenerationError } from '../lib/handleGenerationError'
 
 const MAX_VOICES = 3
 const MIN_DURATION = 5
@@ -101,7 +102,7 @@ export function ClonagemVozPage() {
       if (result.kind === 'timeout') { toast.error('Tempo excedido. Tente de novo daqui a pouco.'); return }
       const { data, error: invokeError } = result
       if (invokeError) throw invokeError
-      if (data?.error) { toast.error(data.error); return }
+      if (data?.error) { handleGenerationError(data); return }
       if (data?.audio_url) {
         applyCreditsFromResponse(data)
         setResultAudio(data.audio_url)

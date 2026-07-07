@@ -9,6 +9,7 @@ import { TOOL_CREDITS } from '../types/credits'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { logEvent } from '../lib/clientDiagnostic'
 import { invokeRaw } from '../lib/invokeRaw'
+import { tryCapModal } from '../lib/handleGenerationError'
 
 const CREDITS = TOOL_CREDITS.edit_image
 
@@ -148,7 +149,7 @@ export function EditImagePage() {
         hasErrorField: !!data?.error,
       })
       if (invokeError) throw invokeError
-      if (data?.error) { setError(data.error); return }
+      if (data?.error) { if (tryCapModal(data)) return; setError(data.error); return }
       const out = data?.image_url || data?.result
       if (typeof out === 'string' && /^https?:\/\//.test(out)) {
         applyCreditsFromResponse(data)

@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from 'sonner'
 import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { calcCredits } from '../types/credits'
+import { tryCapModal } from '../lib/handleGenerationError'
 
 const MAX_FILE_BYTES = 100 * 1024 * 1024
 
@@ -86,7 +87,7 @@ export function TranscricaoPage() {
       }
       const { data, error: invokeError } = result
       if (invokeError) throw invokeError
-      if (data?.error) { setError(data.error); return }
+      if (data?.error) { if (tryCapModal(data)) return; setError(data.error); return }
       if (typeof data?.text === 'string') {
         applyCreditsFromResponse(data)
         setResultText(data.text)

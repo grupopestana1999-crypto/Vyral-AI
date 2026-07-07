@@ -12,6 +12,7 @@ import { useBoosterSettings } from '../stores/booster-settings-store'
 import { LazyVideo } from '../components/LazyVideo'
 import { invokeRaw } from '../lib/invokeRaw'
 import { logEvent } from '../lib/clientDiagnostic'
+import { handleGenerationError } from '../lib/handleGenerationError'
 
 const MAX_PROMPT = 600
 const MIN_DURATION = 1
@@ -327,7 +328,7 @@ export function ImitarMovimentoPage() {
         hasErrorField: !!data?.error,
       })
       if (invokeError) throw invokeError
-      if (data?.error) { toast.error(data.error); return }
+      if (data?.error) { handleGenerationError(data); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
         toast.success('Vídeo entrou na fila — aguarde aqui mesmo')

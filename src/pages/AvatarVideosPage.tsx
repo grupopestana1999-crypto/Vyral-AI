@@ -10,6 +10,7 @@ import { applyCreditsFromResponse } from '../lib/applyCreditsResponse'
 import { calcCredits } from '../types/credits'
 import { invokeRaw } from '../lib/invokeRaw'
 import type { Avatar } from '../types/database'
+import { handleGenerationError } from '../lib/handleGenerationError'
 
 const MAX_TEXT = 2000
 
@@ -80,7 +81,7 @@ export function AvatarVideosPage() {
       if (result.kind === 'timeout') { toast.error('Tempo excedido. A geração pode estar em andamento — veja o Histórico.'); return }
       const { data, error: invokeError } = result
       if (invokeError) throw invokeError
-      if (data?.error) { toast.error(data.error); return }
+      if (data?.error) { handleGenerationError(data); return }
       if (data?.task_id) {
         applyCreditsFromResponse(data)
         toast.success('Vídeo em processamento — leva de 2 a 5 minutos. Assim que ficar pronto aparece na aba Histórico!')
