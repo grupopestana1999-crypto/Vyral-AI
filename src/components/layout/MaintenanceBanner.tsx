@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
 
 // E65: banner de "app em atualização" exibido diariamente das 22h às 5h Brasília.
-// Fechável por sessão (sessionStorage, some se recarregar mesmo dia).
+// Fechável pela sessão até o fim da janela (a janela cruza meia-noite Brasília,
+// então dismiss usa "window-key" = data do dia que INICIOU a janela, não o dia atual).
 const STORAGE_KEY = 'maintenance_banner_dismissed'
 
 function currentHourBrasilia(): number {
@@ -19,6 +20,16 @@ function todayBrasilia(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 }
 
+function yesterdayBrasilia(): string {
+  const now = new Date()
+  now.setUTCDate(now.getUTCDate() - 1)
+  return now.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+}
+
+function currentWindowKey(hour: number): string {
+  return hour < 5 ? yesterdayBrasilia() : todayBrasilia()
+}
+
 export function MaintenanceBanner() {
   const [hour, setHour] = useState(currentHourBrasilia())
   const [dismissed, setDismissed] = useState<string | null>(null)
@@ -30,14 +41,15 @@ export function MaintenanceBanner() {
   }, [])
 
   const inWindow = hour >= 22 || hour < 5
-  const isDismissedToday = dismissed === todayBrasilia()
+  const windowKey = currentWindowKey(hour)
+  const isDismissedThisWindow = dismissed === windowKey
 
-  if (!inWindow || isDismissedToday) return null
+  if (!inWindow || isDismissedThisWindow) return null
 
   function handleDismiss() {
-    const today = todayBrasilia()
-    sessionStorage.setItem(STORAGE_KEY, today)
-    setDismissed(today)
+    const key = currentWindowKey(hour)
+    sessionStorage.setItem(STORAGE_KEY, key)
+    setDismissed(key)
   }
 
   return (
