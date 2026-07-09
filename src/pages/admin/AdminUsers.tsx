@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, Coins, ChevronRight, Ban, ShieldCheck, Mail, History, Crown, X, Loader2, UserPlus, Radar, Send, Infinity as InfinityIcon } from 'lucide-react'
+import { Search, Coins, ChevronRight, Ban, ShieldCheck, Mail, History, Crown, X, Loader2, UserPlus, Radar, Send, Infinity as InfinityIcon, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
 
@@ -14,6 +14,11 @@ interface UserRow {
   credits_remaining: number
   credits_total: number
   subscription_id: string | null
+  // E65: campos do modelo unlimited/cap oculto vindos da RPC admin_list_users estendida.
+  unlimited_daily: boolean
+  lifetime_credits_used: number
+  hidden_cap: number
+  credits_used_today: number
 }
 
 interface HistoryRow {
@@ -42,8 +47,10 @@ export function AdminUsers() {
   const [createOpen, setCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState({ email: '', plan_type: 'starter' as 'starter' | 'creator' | 'pro', credits: 0, send_welcome: true })
   const [creating, setCreating] = useState(false)
-  // E64: modo (Ilimitado/Créditos) do usuário aberto no drawer. Carregado on demand.
+  // E64: modo (Ilimitado/Créditos) do usuário aberto no drawer. Vem da RPC agora (E65).
   const [currentMode, setCurrentMode] = useState<'unlimited' | 'credits' | null>(null)
+  // E65: filtro por modo na barra de busca.
+  const [modeFilter, setModeFilter] = useState<'all' | 'unlimited' | 'credits'>('all')
 
   // load() pode rodar em modo "loud" (mostra skeleton — uso manual ou primeiro carregamento)
   // ou "silent" (atualiza dados sem skeleton — uso pelo realtime ou polling em background).
@@ -106,6 +113,19 @@ export function AdminUsers() {
     else { toast.success(`${creditAmount > 0 ? '+' : ''}${creditAmount} créditos para ${email}`); setCreditAmount(0); load() }
   }
 
+  // E65: pra user unlimited, "adicionar créditos" = resetar lifetime_credits_used (libera outros 600 do cap oculto).
+  async function resetCap(email: string) {
+    if (!confirm(`Resetar o cap oculto de ${email}?\n\nLibera outros ${users.find(u => u.email === email)?.hidden_cap ?? 600} créditos de uso pra ele. O contador volta pra zero.`)) return
+    setBusy(true)
+    const { data, error } = await supabase.rpc('admin_reset_lifetime_credits', { _email: email })
+    setBusy(false)
+    if (error) { toast.error('Erro: ' + error.message); return }
+    const resp = data as { success?: boolean; error?: string; rows?: number }
+    if (!resp?.success) { toast.error('Erro: ' + (resp?.error ?? 'desconhecido')); return }
+    toast.success(`Cap resetado — ${email} liberado`)
+    load(true)
+  }
+
   async function changePlan(u: UserRow) {
     if (!newPlan || !PLAN_OPTIONS.includes(newPlan as typeof PLAN_OPTIONS[number])) return
     setBusy(true)
@@ -158,19 +178,14 @@ export function AdminUsers() {
     else toast.success(`Email de acesso reenviado pra ${u.email}`)
   }
 
-  async function openDrawer(u: UserRow) {
+  function openDrawer(u: UserRow) {
     setOpenId(u.id)
     setNewPlan(u.plan_type ?? '')
     setNewEmail('')
     setHistory(null)
     setCreditAmount(0)
-    setCurrentMode(null)
-    // Lê o modo atual (unlimited_daily) direto da subscription mais recente do usuário.
-    const { data } = await supabase.from('subscriptions')
-      .select('unlimited_daily')
-      .eq('customer_email', u.email).in('status', ['active', 'approved'])
-      .order('created_at', { ascending: false }).limit(1).maybeSingle()
-    setCurrentMode(data?.unlimited_daily ? 'unlimited' : 'credits')
+    // E65: modo agora vem da RPC admin_list_users (não precisa mais SELECT extra).
+    setCurrentMode(u.unlimited_daily ? 'unlimited' : 'credits')
   }
 
   function closeDrawer() {
@@ -216,7 +231,13 @@ export function AdminUsers() {
     load()
   }
 
-  const filtered = users.filter(u => u.email?.toLowerCase().includes(search.toLowerCase()) || u.id.includes(search))
+  const filtered = users.filter(u => {
+    const matchesSearch = u.email?.toLowerCase().includes(search.toLowerCase()) || u.id.includes(search)
+    if (!matchesSearch) return false
+    if (modeFilter === 'unlimited') return u.unlimited_daily === true
+    if (modeFilter === 'credits') return u.unlimited_daily === false && !!u.status
+    return true
+  })
 
   return (
     <div className="space-y-4">
@@ -225,6 +246,14 @@ export function AdminUsers() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
           <input type="text" placeholder="Buscar por email ou ID..." value={search} onChange={e => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-surface-300 border border-white/10 rounded-lg text-white placeholder:text-white/20 focus:outline-none focus:border-primary-500" />
+        </div>
+        <div className="flex bg-surface-300 border border-white/10 rounded-lg p-0.5">
+          {(['all','unlimited','credits'] as const).map(m => (
+            <button key={m} onClick={() => setModeFilter(m)}
+              className={`px-2.5 py-2 rounded-md text-xs font-medium cursor-pointer transition-colors ${modeFilter === m ? 'bg-primary-600 text-white' : 'text-white/50 hover:text-white'}`}>
+              {m === 'all' ? 'Todos' : m === 'unlimited' ? 'Ilimitados' : 'Créditos'}
+            </button>
+          ))}
         </div>
         <button onClick={() => setCreateOpen(true)} className="px-3 py-2.5 rounded-lg bg-primary-600 text-white text-sm font-medium cursor-pointer hover:brightness-110 flex items-center gap-1.5">
           <UserPlus size={14} /> Criar usuário
@@ -307,9 +336,25 @@ export function AdminUsers() {
                     <span>Último: {u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('pt-BR') : 'nunca'}</span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-neon">{u.credits_remaining}</p>
-                  <p className="text-[10px] text-white/30">de {u.credits_total} cr</p>
+                <div className="text-right min-w-[110px]">
+                  {u.unlimited_daily ? (
+                    <>
+                      <div className="flex items-center gap-1 justify-end text-purple-300">
+                        <InfinityIcon size={13} />
+                        <span className="text-[10px] font-bold uppercase tracking-wide">Ilimitado</span>
+                      </div>
+                      <p className="text-[10px] text-white/40 mt-0.5">{u.lifetime_credits_used}/{u.hidden_cap} cap · {u.credits_used_today} hoje</p>
+                      <div className="mt-1 h-1 w-full bg-surface-400 rounded-full overflow-hidden">
+                        <div className={`h-full ${u.lifetime_credits_used >= u.hidden_cap ? 'bg-red-500' : u.lifetime_credits_used > u.hidden_cap * 0.8 ? 'bg-amber-500' : 'bg-purple-500'}`}
+                          style={{ width: `${Math.min(100, (u.lifetime_credits_used / Math.max(1, u.hidden_cap)) * 100)}%` }} />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-neon">{u.credits_remaining}</p>
+                      <p className="text-[10px] text-white/30">de {u.credits_total} cr</p>
+                    </>
+                  )}
                 </div>
                 <button onClick={() => openId === u.id ? closeDrawer() : openDrawer(u)}
                   className="p-2 rounded-lg hover:bg-white/5 text-white/30 hover:text-primary-400 transition-colors cursor-pointer">
@@ -334,14 +379,37 @@ export function AdminUsers() {
                     </div>
                   </div>
 
-                  {/* Ajustar créditos */}
-                  <div className="flex items-center gap-2">
-                    <Coins size={14} className="text-white/40 shrink-0" />
-                    <input type="number" value={creditAmount} onChange={e => setCreditAmount(Number(e.target.value))} placeholder="Ex: 100 ou -50"
-                      className="flex-1 px-3 py-2 bg-surface-400 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500" />
-                    <button onClick={() => adjustCredits(u.email)} disabled={busy || creditAmount === 0}
-                      className="px-3 py-2 rounded-lg bg-primary-600 text-white text-xs font-medium hover:brightness-110 disabled:opacity-50 cursor-pointer">Ajustar</button>
-                  </div>
+                  {/* E65: Botão de reset do cap oculto — só faz sentido pra unlimited. */}
+                  {currentMode === 'unlimited' && (
+                    <div>
+                      <div className="bg-surface-400/50 rounded-lg p-3 mb-2">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] text-white/40 uppercase">Cap oculto (E65)</span>
+                          <span className="text-[10px] text-white/60 font-mono">{u.lifetime_credits_used}/{u.hidden_cap}</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-surface-300 rounded-full overflow-hidden">
+                          <div className={`h-full ${u.lifetime_credits_used >= u.hidden_cap ? 'bg-red-500' : u.lifetime_credits_used > u.hidden_cap * 0.8 ? 'bg-amber-500' : 'bg-purple-500'}`}
+                            style={{ width: `${Math.min(100, (u.lifetime_credits_used / Math.max(1, u.hidden_cap)) * 100)}%` }} />
+                        </div>
+                        <p className="text-[10px] text-white/40 mt-1.5">Consumo hoje: {u.credits_used_today} cr</p>
+                      </div>
+                      <button onClick={() => resetCap(u.email)} disabled={busy}
+                        className="w-full px-3 py-2 rounded-lg bg-purple-600/30 text-purple-200 hover:bg-purple-600/50 text-xs font-medium cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50">
+                        <RefreshCw size={13} /> Resetar cap oculto (libera +{u.hidden_cap} cr)
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Ajustar créditos — só faz sentido pra credit-mode. Pra unlimited, o botão "Resetar cap" acima cumpre o papel. */}
+                  {currentMode !== 'unlimited' && (
+                    <div className="flex items-center gap-2">
+                      <Coins size={14} className="text-white/40 shrink-0" />
+                      <input type="number" value={creditAmount} onChange={e => setCreditAmount(Number(e.target.value))} placeholder="Ex: 100 ou -50"
+                        className="flex-1 px-3 py-2 bg-surface-400 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500" />
+                      <button onClick={() => adjustCredits(u.email)} disabled={busy || creditAmount === 0}
+                        className="px-3 py-2 rounded-lg bg-primary-600 text-white text-xs font-medium hover:brightness-110 disabled:opacity-50 cursor-pointer">Ajustar</button>
+                    </div>
+                  )}
 
                   {/* Alterar plano */}
                   <div className="flex items-center gap-2">
