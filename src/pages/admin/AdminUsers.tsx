@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Search, Coins, ChevronRight, Ban, ShieldCheck, Mail, History, Crown, X, Loader2, UserPlus, Radar, Send, Infinity as InfinityIcon, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { toast } from 'sonner'
+import { extractEdgeError } from '../../lib/adminErrors'
 
 interface UserRow {
   id: string
@@ -96,20 +97,20 @@ export function AdminUsers() {
     const msg = isUnlocked ? `Revogar acesso ao Radar de Tarefas de ${u.email}?` : `Liberar acesso ao Radar de Tarefas pra ${u.email} (cortesia)?`
     if (!confirm(msg)) return
     setBusy(true)
-    const { error } = await supabase.functions.invoke('admin-update-user', {
+    const { data, error } = await supabase.functions.invoke('admin-update-user', {
       body: { user_id: u.id, email: u.email, action },
     })
     setBusy(false)
-    if (error) toast.error('Erro: ' + error.message)
+    if (error || (data as { error?: string })?.error) toast.error(await extractEdgeError(error, data))
     else { toast.success(isUnlocked ? 'Acesso revogado' : 'Radar liberado'); load() }
   }
 
   async function adjustCredits(email: string) {
     if (creditAmount === 0) return
     setBusy(true)
-    const { error } = await supabase.functions.invoke('admin-add-credits', { body: { email, amount: creditAmount } })
+    const { data, error } = await supabase.functions.invoke('admin-add-credits', { body: { email, amount: creditAmount } })
     setBusy(false)
-    if (error) toast.error('Erro ao ajustar créditos')
+    if (error || (data as { error?: string })?.error) toast.error(await extractEdgeError(error, data))
     else { toast.success(`${creditAmount > 0 ? '+' : ''}${creditAmount} créditos para ${email}`); setCreditAmount(0); load() }
   }
 
@@ -129,22 +130,22 @@ export function AdminUsers() {
   async function changePlan(u: UserRow) {
     if (!newPlan || !PLAN_OPTIONS.includes(newPlan as typeof PLAN_OPTIONS[number])) return
     setBusy(true)
-    const { error } = await supabase.functions.invoke('admin-update-user', {
+    const { data, error } = await supabase.functions.invoke('admin-update-user', {
       body: { user_id: u.id, email: u.email, action: 'change_plan', payload: { plan_type: newPlan } },
     })
     setBusy(false)
-    if (error) toast.error('Erro ao alterar plano')
+    if (error || (data as { error?: string })?.error) toast.error(await extractEdgeError(error, data))
     else { toast.success(`Plano alterado para ${newPlan}`); setNewPlan(''); load() }
   }
 
   async function toggleBan(u: UserRow) {
     if (!confirm(u.is_banned ? `Desbloquear ${u.email}?` : `Bloquear ${u.email}? Ele não conseguirá mais logar.`)) return
     setBusy(true)
-    const { error } = await supabase.functions.invoke('admin-update-user', {
+    const { data, error } = await supabase.functions.invoke('admin-update-user', {
       body: { user_id: u.id, email: u.email, action: u.is_banned ? 'unban' : 'ban' },
     })
     setBusy(false)
-    if (error) toast.error('Erro ao bloquear/desbloquear')
+    if (error || (data as { error?: string })?.error) toast.error(await extractEdgeError(error, data))
     else { toast.success(u.is_banned ? 'Desbloqueado' : 'Bloqueado'); load() }
   }
 
@@ -152,11 +153,11 @@ export function AdminUsers() {
     if (!newEmail || !newEmail.includes('@')) { toast.error('Email inválido'); return }
     if (!confirm(`Trocar email de ${u.email} para ${newEmail}?`)) return
     setBusy(true)
-    const { error } = await supabase.functions.invoke('admin-update-user', {
+    const { data, error } = await supabase.functions.invoke('admin-update-user', {
       body: { user_id: u.id, email: u.email, action: 'change_email', payload: { email: newEmail } },
     })
     setBusy(false)
-    if (error) toast.error('Erro ao trocar email')
+    if (error || (data as { error?: string })?.error) toast.error(await extractEdgeError(error, data))
     else { toast.success('Email trocado'); setNewEmail(''); load() }
   }
 
@@ -170,11 +171,11 @@ export function AdminUsers() {
 
   async function resendWelcome(u: UserRow) {
     setBusy(true)
-    const { error } = await supabase.functions.invoke('admin-update-user', {
+    const { data, error } = await supabase.functions.invoke('admin-update-user', {
       body: { user_id: u.id, email: u.email, action: 'resend_welcome' },
     })
     setBusy(false)
-    if (error) toast.error('Erro: ' + error.message)
+    if (error || (data as { error?: string })?.error) toast.error(await extractEdgeError(error, data))
     else toast.success(`Email de acesso reenviado pra ${u.email}`)
   }
 
@@ -222,7 +223,7 @@ export function AdminUsers() {
     })
     setCreating(false)
     if (error || (data as { error?: string })?.error) {
-      toast.error('Erro ao criar usuário: ' + (error?.message ?? (data as { error?: string })?.error ?? 'desconhecido'))
+      toast.error(await extractEdgeError(error, data))
       return
     }
     toast.success(`Usuário ${createForm.email} criado com ${createForm.credits} créditos`)
