@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { useEffect } from 'react'
 import { useAuthStore } from './stores/auth-store'
+import { useVersionCheck } from './hooks/useVersionCheck'
 import { AppLayout } from './components/layout/AppLayout'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { AuthPage } from './pages/AuthPage'
@@ -57,6 +58,8 @@ export default function App() {
   const initialize = useAuthStore((s: { initialize: () => Promise<void> }) => s.initialize)
   const loadBooster = useBoosterSettings(s => s.load)
   const subscribeBooster = useBoosterSettings(s => s.subscribe)
+  // E65 dia 5: avisa user quando a aba tá com bundle antigo depois de deploy Railway.
+  useVersionCheck()
 
   useEffect(() => {
     initialize()
