@@ -362,7 +362,10 @@ export function EditImagePage() {
         {error ? (
           <div className="text-center py-10">
             <p className="text-red-400 text-sm mb-1">{error}</p>
-            <p className="text-[11px] text-white/40">Se créditos foram debitados, foram estornados automaticamente.</p>
+            {/* E65 dia 5: subtítulo só quando o erro veio DA edge (implica debit possível). Erros de sessão/rede não debitam. */}
+            {!/sessão expirada|Sua sessão|Unauthorized|rede:/i.test(error) && (
+              <p className="text-[11px] text-white/40">Se créditos foram debitados, foram estornados automaticamente.</p>
+            )}
           </div>
         ) : generating ? (
           <div className="flex flex-col items-center justify-center gap-3 py-12">
