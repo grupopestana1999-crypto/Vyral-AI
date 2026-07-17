@@ -3,6 +3,7 @@ import { Toaster } from 'sonner'
 import { useEffect } from 'react'
 import { useAuthStore } from './stores/auth-store'
 import { useVersionCheck } from './hooks/useVersionCheck'
+import { useGenerationErrorStore } from './stores/generation-error-store'
 import { AppLayout } from './components/layout/AppLayout'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { AuthPage } from './pages/AuthPage'
@@ -67,6 +68,17 @@ export default function App() {
     const unsub = subscribeBooster()
     return unsub
   }, [initialize, loadBooster, subscribeBooster])
+
+  // E65 dia 5: preview do modal "Créditos esgotados" via query param.
+  // Uso: acesse qualquer rota autenticada com ?preview=credits-esgotados
+  // Zero credito consumido, zero dado alterado — só mostra a UI.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('preview') === 'credits-esgotados') {
+      useGenerationErrorStore.getState().openCapExhausted()
+    }
+  }, [])
 
   return (
     <BrowserRouter>
