@@ -5,7 +5,7 @@ import { useGenerationErrorStore } from '../stores/generation-error-store'
 // Antes só oferecia contato com suporte. Agora oferece renovacao instantanea via
 // Hotmart — o webhook zera lifetime_credits_used no PURCHASE_APPROVED (v25+),
 // entao o user desbloqueia sozinho apos o pagamento.
-const SUPPORT_LINK = 'https://wa.me/5511999999999?text=Ol%C3%A1%2C%20meus%20cr%C3%A9ditos%20foram%20esgotados%20no%20Vyral%20AI%20e%20preciso%20de%20reativa%C3%A7%C3%A3o.'
+const SUPPORT_LINK = 'https://wa.me/5571993849568?text=Ol%C3%A1%2C%20meus%20cr%C3%A9ditos%20foram%20esgotados%20no%20Vyral%20AI%20e%20preciso%20de%20reativa%C3%A7%C3%A3o.'
 const RENEW_LINK = 'https://pay.hotmart.com/S104977129J?off=k0rq7f2g&checkoutMode=10'
 
 export function CreditsExhaustedModal() {
