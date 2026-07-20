@@ -66,6 +66,13 @@ export const useAuthStore = create<AuthState>((set) => ({
         unsubscribeFromSubscriptionChanges()
         setDiagnosticEmail(null)
         set({ user: null, session: null, role: 'user', subscription: null, dailyQuota: null })
+        // E65 dia 6: HARD NAV em SIGNED_OUT em vez de deixar ProtectedRoute fazer soft nav.
+        // Se o user foi deslogado por force-signout (kill switch de deploy), forçar reload
+        // da página faz o browser buscar index.html novo → pega bundle mais recente.
+        // Sem isso, kill switch só faz React re-render sem trocar o bundle em memória.
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth')) {
+          window.location.href = '/auth'
+        }
       }
     })
   },

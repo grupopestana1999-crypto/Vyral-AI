@@ -11,6 +11,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Vyral AI" />
+    <!-- E65 dia 6: rede de segurança contra aba pinada em bundle antigo. Força
+         reload silencioso a cada 3h. Se user tá ativo, mal percebe (React remonta
+         com bundle fresh). Se aba tá em background/inativa, garante que nenhum
+         browser mantém código > 3h sem checar o servidor. Sem isso, users iOS
+         Safari podem ficar meses em bundle antigo sem nunca revalidar. -->
+    <meta http-equiv="refresh" content="10800" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />

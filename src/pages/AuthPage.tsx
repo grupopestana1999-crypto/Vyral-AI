@@ -44,7 +44,10 @@ export function AuthPage() {
       if (error) {
         toast.error(error)
       } else {
-        navigate('/dashboard')
+        // E65 dia 6: hard nav em vez de navigate() do react-router. Garante que login sempre
+        // pega o bundle mais recente do index.html — cobre users que ficaram meses com aba antiga
+        // e finalmente re-logaram (soft nav manteria o bundle antigo em memória).
+        window.location.href = '/dashboard'
       }
     } else if (tab === 'register') {
       // Gate de signup: só permite cadastro de email que já comprou um plano via Hotmart.
