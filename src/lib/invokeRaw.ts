@@ -73,8 +73,16 @@ export async function invokeRaw<T = unknown>(
     }
 
     if (!attempt.ok) {
-      const errMsg = (attempt.data as { error?: string } | null)?.error || `HTTP ${attempt.status}`
-      return { kind: 'response', data: null, error: { message: errMsg } }
+      // E65 dia 7: erro de NEGÓCIO estruturado ({error, code}) volta como `data`, não `error`.
+      // Antes virava `error` e as 14 páginas de booster fazem `throw invokeError` ANTES de
+      // olhar `data?.error` — então o `code` (ex: 'internal_cap_reached') nunca chegava no
+      // tryCapModal/handleGenerationError, e o usuário via o texto cru inline sem o modal
+      // "Créditos esgotados!" com o botão de renovação. Cobre 402 (cap/créditos),
+      // 403 (booster off) e 429 (rate limit / cota diária).
+      const body = attempt.data as { error?: string; code?: string } | null
+      if (body?.error) return { kind: 'response', data: attempt.data, error: null }
+      // Sem body estruturado (500 sem JSON, gateway) — segue como erro genérico.
+      return { kind: 'response', data: null, error: { message: `HTTP ${attempt.status}` } }
     }
     return { kind: 'response', data: attempt.data, error: null }
   } catch (e) {

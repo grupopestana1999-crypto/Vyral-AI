@@ -1,6 +1,7 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Users, Sparkles, FileText, Zap, Gift, Settings, ArrowLeft, Activity, Package, Video, UserCircle, CreditCard, Mail, Target } from 'lucide-react'
 import { useAuthStore } from '../../stores/auth-store'
+import { ProviderHealthBanner } from '../../components/admin/ProviderHealthBanner'
 
 const adminMenu = [
   { path: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -65,6 +66,10 @@ export function AdminLayout() {
           )
         })}
       </div>
+
+      {/* E65 dia 7: saldo zerado de Kie/Replicate/Gemini vira INSTABILITY_MSG genérica pro
+          usuário. Aqui o dono vê a causa real. Só renderiza quando há problema. */}
+      <ProviderHealthBanner />
 
       <Outlet />
     </div>
