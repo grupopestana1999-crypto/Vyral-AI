@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuthStore } from './stores/auth-store'
 import { useVersionCheck } from './hooks/useVersionCheck'
 import { useGenerationErrorStore } from './stores/generation-error-store'
@@ -59,6 +59,7 @@ export default function App() {
   const initialize = useAuthStore((s: { initialize: () => Promise<void> }) => s.initialize)
   const loadBooster = useBoosterSettings(s => s.load)
   const subscribeBooster = useBoosterSettings(s => s.subscribe)
+  const [mostrarAviso, setMostrarAviso] = useState(true)
   // E65 dia 5: avisa user quando a aba tá com bundle antigo depois de deploy Railway.
   useVersionCheck()
 
@@ -81,19 +82,74 @@ export default function App() {
   }, [])
 
   return (
-    <BrowserRouter>
-      <Toaster
-        position="top-right"
-        theme="dark"
-        toastOptions={{
-          style: {
-            background: '#1a1828',
-            border: '1px solid rgba(255,255,255,0.05)',
-            color: '#fff',
-          },
+<BrowserRouter>
+  <Toaster
+    position="top-right"
+    theme="dark"
+    toastOptions={{
+      style: {
+        background: '#1a1828',
+        border: '1px solid rgba(255,255,255,0.05)',
+        color: '#fff',
+      },
+    }}
+  />
+
+  {/* COLE O AVISO AQUI */}
+  {mostrarAviso && (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        background: 'rgba(0,0,0,.75)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 999999,
+      }}
+    >
+      <div
+        style={{
+          background: '#1a1828',
+          color: '#fff',
+          width: '90%',
+          maxWidth: '500px',
+          borderRadius: '16px',
+          padding: '30px',
+          textAlign: 'center',
         }}
-      />
-      <Routes>
+      >
+        <h2>⚠️ Aviso Importante</h2>
+
+        <p style={{ marginTop: 20 }}>
+         🚨ATENÇÃO: Nos últimos dias recebemos alguns relatos de instabilidade no uso do aplicativo e, por isso, optamos por suspender temporariamente o acesso de todos os alunos no dia de hoje.
+
+Neste momento, o app está passando por atualizações importantes para melhorar a experiência de vocês. A previsão de reativação é hoje às 21h.
+        </p>
+
+        <button
+          onClick={() => setMostrarAviso(false)}
+          style={{
+            marginTop: 25,
+            padding: '12px 30px',
+            borderRadius: 10,
+            border: 'none',
+            cursor: 'pointer',
+            background: '#7c3aed',
+            color: '#fff',
+            fontWeight: 'bold',
+          }}
+        >
+          Entendi
+        </button>
+      </div>
+    </div>
+  )}
+
+  <Routes>
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/terms" element={<TermsPage />} />
