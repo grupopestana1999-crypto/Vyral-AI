@@ -40,7 +40,7 @@ export function MaintenanceBanner() {
     return () => clearInterval(id)
   }, [])
 
-  const inWindow = hour >= 22 || hour < 5
+  const inWindow = true
   const windowKey = currentWindowKey(hour)
   const isDismissedThisWindow = dismissed === windowKey
 
@@ -56,8 +56,10 @@ export function MaintenanceBanner() {
     <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 md:px-6 py-2.5 flex items-center gap-3">
       <AlertTriangle size={16} className="text-amber-400 shrink-0" />
       <p className="text-xs md:text-sm text-amber-100/90 flex-1">
-        <strong className="text-amber-300">🔧 O app está em processo de atualização das 22h às 5h.</strong>{' '}
-        Recomendamos retornar pela manhã para evitar instabilidades nas gerações.
+        <strong className="text-amber-300">🔧 🚨ATENÇÃO:</strong>{' '}
+Nos últimos dias recebemos alguns relatos de instabilidade no uso do aplicativo e, por isso, optamos por suspender temporariamente o acesso de todos os alunos no dia de hoje.
+
+Neste momento, o app está passando por atualizações importantes para melhorar a experiência de vocês. A previsão de reativação é hoje às 21h.
       </p>
       <button
         onClick={handleDismiss}
