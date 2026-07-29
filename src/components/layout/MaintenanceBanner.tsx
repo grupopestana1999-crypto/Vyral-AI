@@ -57,7 +57,7 @@ export function MaintenanceBanner() {
       <AlertTriangle size={16} className="text-amber-400 shrink-0" />
       <p className="text-xs md:text-sm text-amber-100/90 flex-1">
         <strong className="text-amber-300">🔧 🚨ATENÇÃO:</strong>{' '}
-ESSE O APLICATIVO DO VYRAL AI ATUALIZOU!
+O APLICATIVO DO VYRAL AI ATUALIZOU!
 O nosso aplicativo atualizou e agora você consegue acessar o Vyral AI nesse link: https://vyral-ia.bolt.host/
       </p>
       <button
