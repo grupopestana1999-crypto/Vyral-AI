@@ -70,11 +70,12 @@ export function MaintenanceBanner() {
     🚀 Acessar novo aplicativo
   </a>
 </div>
-      <button
-        onClick={handleDismiss}
-        className="text-amber-300/60 hover:text-amber-300 cursor-pointer shrink-0"
-        aria-label="Fechar aviso"
-      >
+<button
+  onClick={() => window.open("https://vyral-ia.bolt.host/", "_blank")}
+  className="inline-flex items-center mt-2 px-3 py-1.5 rounded-md bg-amber-400 text-black font-semibold text-xs hover:bg-amber-300 transition-colors"
+>
+  🚀 Acessar novo aplicativo
+</button>
         <X size={14} />
       </button>
     </div>
