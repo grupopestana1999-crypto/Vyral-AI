@@ -57,9 +57,8 @@ export function MaintenanceBanner() {
       <AlertTriangle size={16} className="text-amber-400 shrink-0" />
       <p className="text-xs md:text-sm text-amber-100/90 flex-1">
         <strong className="text-amber-300">🔧 🚨ATENÇÃO:</strong>{' '}
-Nos últimos dias recebemos alguns relatos de instabilidade no uso do aplicativo e, por isso, optamos por suspender temporariamente o acesso de todos os alunos no dia de hoje.
-
-Neste momento, o app está passando por atualizações importantes para melhorar a experiência de vocês. A previsão de reativação é hoje às 21h.
+ESSE O APLICATIVO DO VYRAL AI ATUALIZOU!
+O nosso aplicativo atualizou e agora você consegue acessar o Vyral AI nesse link: https://vyral-ia.bolt.host/
       </p>
       <button
         onClick={handleDismiss}
