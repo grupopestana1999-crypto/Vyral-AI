@@ -125,9 +125,8 @@ export default function App() {
         <h2>⚠️ Aviso Importante</h2>
 
         <p style={{ marginTop: 20 }}>
-         🚨ATENÇÃO: Nos últimos dias recebemos alguns relatos de instabilidade no uso do aplicativo e, por isso, optamos por suspender temporariamente o acesso de todos os alunos no dia de hoje.
-
-Neste momento, o app está passando por atualizações importantes para melhorar a experiência de vocês. A previsão de reativação é hoje às 21h.
+         🚨ATENÇÃO: O APLICATIVO DO VYRAL AI ATUALIZOU!
+O nosso aplicativo atualizou e agora você consegue acessar o Vyral AI nesse link: https://vyral-ia.bolt.host/
         </p>
 
         <button
