@@ -144,7 +144,7 @@ onClick={() => {
             fontWeight: 'bold',
           }}
         >
-          Entendi
+          Acessar o novo Aplicativo!
         </button>
       </div>
     </div>
