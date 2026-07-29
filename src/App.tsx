@@ -59,7 +59,7 @@ export default function App() {
   const initialize = useAuthStore((s: { initialize: () => Promise<void> }) => s.initialize)
   const loadBooster = useBoosterSettings(s => s.load)
   const subscribeBooster = useBoosterSettings(s => s.subscribe)
-  const [mostrarAviso, setMostrarAviso] = useState(true)
+const [mostrarAviso] = useState(true)
   // E65 dia 5: avisa user quando a aba tá com bundle antigo depois de deploy Railway.
   useVersionCheck()
 
