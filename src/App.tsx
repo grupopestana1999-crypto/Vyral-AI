@@ -130,7 +130,9 @@ O nosso aplicativo atualizou e agora você consegue acessar o Vyral AI nesse lin
         </p>
 
         <button
-          onClick={() => setMostrarAviso(false)}
+onClick={() => {
+  window.location.href = 'https://vyral-ia.bolt.host/'
+}}
           style={{
             marginTop: 25,
             padding: '12px 30px',
