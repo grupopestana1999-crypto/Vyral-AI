@@ -55,11 +55,21 @@ export function MaintenanceBanner() {
   return (
     <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 md:px-6 py-2.5 flex items-center gap-3">
       <AlertTriangle size={16} className="text-amber-400 shrink-0" />
-      <p className="text-xs md:text-sm text-amber-100/90 flex-1">
-        <strong className="text-amber-300">🔧 🚨ATENÇÃO:</strong>{' '}
-O APLICATIVO DO VYRAL AI ATUALIZOU!
-O nosso aplicativo atualizou e agora você consegue acessar o Vyral AI nesse link: https://vyral-ia.bolt.host/
-      </p>
+<div className="flex-1">
+  <p className="text-xs md:text-sm text-amber-100/90">
+    <strong className="text-amber-300">🔧 🚨 ATENÇÃO:</strong>{' '}
+    O aplicativo do Vyral AI foi atualizado! Agora você deve acessar pelo novo endereço.
+  </p>
+
+  <a
+    href="https://vyral-ia.bolt.host/"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="inline-flex items-center mt-2 px-3 py-1.5 rounded-md bg-amber-400 text-black font-semibold text-xs hover:bg-amber-300 transition-colors"
+  >
+    🚀 Acessar novo aplicativo
+  </a>
+</div>
       <button
         onClick={handleDismiss}
         className="text-amber-300/60 hover:text-amber-300 cursor-pointer shrink-0"
